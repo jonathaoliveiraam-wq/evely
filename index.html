@@ -435,11 +435,35 @@
         position: fixed; top: 68px; left: 0; right: 0;
         background: var(--white); padding: 1.5rem 5%; border-bottom: 1px solid var(--gray-200);
       }
-      .hero-inner    { grid-template-columns: 1fr; }
-      .hero-image    { display: none; }
-      .about-grid    { grid-template-columns: 1fr; }
+
+      .hero { padding: 90px 5% 50px; }
+      .hero-inner {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+      }
+
+      /* foto aparece primeiro no mobile */
+      .hero-image {
+        display: flex;
+        order: -1;
+        justify-content: center;
+      }
+      .hero-avatar {
+        width: 240px; height: 240px;
+      }
+      .hero-pill { display: none; }
+
+      .hero h1 { font-size: 2rem; }
+      .hero-desc { font-size: .95rem; }
+      .hero-stats { gap: 1.2rem; }
+
+      .about-grid    { grid-template-columns: 1fr; gap: 2rem; }
       .attend-grid   { grid-template-columns: 1fr; }
       .location-grid { grid-template-columns: 1fr; }
+
+      .attend-card { padding: 1.8rem; }
+      .contact-cards { flex-direction: column; align-items: center; }
+      .contact-card  { width: 100%; max-width: 320px; }
     }
   </style>
 </head>
