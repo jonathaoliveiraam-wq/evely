@@ -276,24 +276,7 @@
     }
     .spec-card p { font-size: .9rem; color: var(--gray-600); line-height: 1.7; }
 
-    .spec-card--wide { grid-column: 1 / -1; }
-    .spec-card--wide .spec-list {
-      display: grid; grid-template-columns: 1fr 1fr;
-      gap: .5rem .5rem; margin-top: 1.2rem; list-style: none;
-    }
-    .spec-card--wide .spec-list li {
-      display: flex; align-items: center; gap: .55rem;
-      font-size: .88rem; color: var(--gray-600);
-    }
-    .spec-card--wide .spec-list li::before {
-      content: ''; width: 7px; height: 7px; border-radius: 50%;
-      background: var(--teal-500); flex-shrink: 0;
-    }
-    @media (max-width: 640px) {
-      .spec-card--wide .spec-list { grid-template-columns: 1fr; }
-    }
-
-    .spec-tags { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: 1.2rem; }
+.spec-tags { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: 1.2rem; }
     .tag {
       background: var(--teal-50); color: var(--teal-700);
       font-size: .75rem; font-weight: 600; padding: .25rem .65rem;
@@ -645,20 +628,20 @@
           </div>
         </div>
 
-        <div class="spec-card spec-card--wide">
+        <div class="spec-card">
           <div class="spec-icon"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg></div>
-          <h3>Órteses 3D e Reabilitação Ortopédica</h3>
-          <p>Soluções personalizadas em órteses, palmilhas e coletes com tecnologia de impressão 3D, combinadas à reabilitação ortopédica especializada.</p>
-          <ul class="spec-list">
-            <li>Órteses 3D personalizadas</li>
-            <li>Coletes para escoliose</li>
-            <li>Palmilhas personalizadas</li>
-            <li>Avaliação postural e biomecânica</li>
-            <li>Distúrbios da marcha</li>
-            <li>Pé torto congênito</li>
-            <li>Pé plano e pé valgo</li>
-            <li>Reabilitação ortopédica</li>
-          </ul>
+          <h3>Órteses 3D e Ortopedia</h3>
+          <p>Dispositivos personalizados com tecnologia 3D para correção postural, marcha e reabilitação ortopédica.</p>
+          <div class="spec-tags">
+            <span class="tag">Órteses 3D</span>
+            <span class="tag">Coletes Escoliose</span>
+            <span class="tag">Palmilhas</span>
+            <span class="tag">Avaliação Postural</span>
+            <span class="tag">Pé Torto</span>
+            <span class="tag">Pé Plano</span>
+            <span class="tag">Marcha</span>
+            <span class="tag">Reabilitação</span>
+          </div>
         </div>
 
         <div class="spec-card">
