@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Teal (verde-petróleo) ── */
+  --color-teal-900: #04342C;
+  --color-teal-800: #085041;
+  --color-teal-700: #0F6E56;
+  --color-teal-500: #1D9E75;
+  --color-teal-300: #5DCAA5;
+  --color-teal-100: #9FE1CB;
+  --color-teal-50:  #E1F5EE;
+
+  /* ── Orange (laranja de acento) ── */
+  --color-orange-700: #993C1D;
+  --color-orange-500: #D85A30;
+  --color-orange-100: #F0997B;
+  --color-orange-50:  #FAECE7;
+
+  /* ── Navy / Cinza ── */
+  --color-navy-900: #101826;
+  --color-navy-700: #2A3344;
+  --color-gray-600: #5B6470;
+  --color-gray-400: #8B939E;
+  --color-gray-200: #E3E7EB;
+  --color-gray-100: #F1F3F5;
+  --color-gray-50:  #F8F9FA;
+
+  /* ── Semânticas ── */
+  --color-red-700:    #791F1F;
+  --color-red-500:    #E24B4A;
+  --color-red-50:     #FCEBEB;
+  --color-amber-700:  #854F0B;
+  --color-amber-500:  #EF9F27;
+  --color-amber-50:   #FAEEDA;
+  --color-green-bg:   #EAF3DE;
+  --color-green-text: #27500A;
+
+  /* ── Tipografia ── */
+  --font-display: "Poppins", sans-serif;
+  --font-body:    "Inter", sans-serif;
+
+  /* ── Border-radius ── */
+  --radius-sm:   8px;
+  --radius-md:   12px;
+  --radius-lg:   18px;
+  --radius-pill: 9999px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-gray-50);
+  color: var(--color-navy-900);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+}
