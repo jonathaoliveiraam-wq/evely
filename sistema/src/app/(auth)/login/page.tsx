@@ -1,14 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type SubmitEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type Mode = "admin" | "patient";
 
+// Usuários de teste para rodar localmente sem Supabase configurado
+const DEV_USERS: Record<string, { password: string; redirect: string }> = {
+  "evely@passointeligente.com.br": { password: "admin123", redirect: "/gestao" },
+  "paciente@gmail.com": { password: "paciente123", redirect: "/portal" },
+};
+
+const supabaseConfigured =
+  (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").startsWith("http");
+
 export default function LoginPage() {
   const router = useRouter();
-  const supabase = createClient();
 
   const [mode, setMode] = useState<Mode>("patient");
   const [identifier, setIdentifier] = useState("");
@@ -16,20 +24,33 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     setLoading(true);
 
     try {
-      let email = identifier;
-
-      if (mode === "patient") {
-        // Username → email construído internamente
-        email = `${identifier.toLowerCase().trim()}@portal.evelypassinho`;
+      // Modo dev: Supabase não configurado — usa usuários locais
+      if (!supabaseConfigured) {
+        const key = identifier.toLowerCase().trim();
+        const user = DEV_USERS[key];
+        if (user && user.password === password) {
+          router.push(user.redirect);
+        } else {
+          setError("Usuário ou senha incorretos.");
+        }
+        return;
       }
 
-      const { error: authError } = await supabase.auth.signInWithPassword({
+      // Produção: autenticação via Supabase
+      const supabase = createClient();
+      const slug = identifier.toLowerCase().trim();
+      const email =
+        mode === "patient"
+          ? slug.includes("@") ? slug : `${slug}@portal.evelypassinho.com`
+          : identifier;
+
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -39,8 +60,12 @@ export default function LoginPage() {
         return;
       }
 
-      // O middleware redireciona para a rota correta conforme role
-      router.refresh();
+      const role = data.user?.user_metadata?.role;
+      if (role === "admin") {
+        router.push("/gestao");
+      } else {
+        router.push("/portal");
+      }
     } finally {
       setLoading(false);
     }
@@ -112,13 +137,13 @@ export default function LoginPage() {
                 className="block text-xs font-semibold mb-1.5"
                 style={{ color: "var(--color-navy-700)" }}
               >
-                {mode === "patient" ? "Nome de usuário" : "E-mail"}
+                E-mail
               </label>
               <input
-                type={mode === "admin" ? "email" : "text"}
+                type="email"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder={mode === "patient" ? "seu.usuario" : "evely@email.com"}
+                placeholder={mode === "patient" ? "paciente@gmail.com" : "evely@passointeligente.com.br"}
                 required
                 className="w-full px-3 py-2.5 text-sm outline-none transition-colors"
                 style={{
@@ -187,7 +212,21 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="text-center text-xs mt-6" style={{ color: "var(--color-gray-400)" }}>
+        {/* Dica de dev local */}
+        {!supabaseConfigured && (
+          <div
+            className="mt-4 p-3 text-xs text-center"
+            style={{
+              background: "var(--color-amber-50)",
+              borderRadius: "var(--radius-sm)",
+              color: "var(--color-amber-700)",
+            }}
+          >
+            Modo local · admin: <strong>evely@passointeligente.com.br / admin123</strong> · paciente: <strong>paciente@gmail.com / paciente123</strong>
+          </div>
+        )}
+
+        <p className="text-center text-xs mt-4" style={{ color: "var(--color-gray-400)" }}>
           Problemas para acessar? Fale com a Dra. Evely.
         </p>
       </div>
