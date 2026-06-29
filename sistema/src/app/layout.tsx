@@ -15,8 +15,21 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Dra. Evely — Sistema de Gestão",
-  description: "Espaço Passinho · Fisioterapia",
+  title: "Dra. Evely Sarmento — Fisioterapeuta",
+  description: "Fisioterapeuta especialista · Espaço Passinho",
+  openGraph: {
+    title: "Dra. Evely Sarmento",
+    description: "Fisioterapeuta",
+    images: [{ url: "/og-image.jpg", width: 1200, height: 630 }],
+    locale: "pt_BR",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Dra. Evely Sarmento",
+    description: "Fisioterapeuta",
+    images: ["/og-image.jpg"],
+  },
 };
 
 export default function RootLayout({
