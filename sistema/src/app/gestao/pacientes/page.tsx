@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type Patient = {
@@ -41,18 +41,12 @@ const STATUS_BADGE: Record<string, string> = {
   cancelled:           "badge-neutral",
 };
 
-const STATUS_ICON: Record<string, string> = {
-  awaiting_evaluation: "ti-stethoscope",
-  awaiting_payment:    "ti-credit-card",
-  active:              "",
-  suspended_travel:    "",
-};
-
 function initials(name: string) {
   return name.split(" ").filter(Boolean).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 }
 
-const EMPTY_FORM = { diagnosis: "", short_term_goal: "", medium_term_goal: "", long_term_goal: "" };
+const PHOTO_SLOTS = ["Frente", "Costas", "Lado direito", "Lado esquerdo"];
+const EMPTY_FORM  = { diagnosis: "", short_term_goal: "", medium_term_goal: "", long_term_goal: "" };
 
 export default function PacientesPage() {
   const [tab, setTab]               = useState<"lista" | "financeiro" | "cs">("lista");
@@ -62,8 +56,11 @@ export default function PacientesPage() {
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
   const [modalTab, setModalTab]     = useState<"resumo" | "historico" | "prontuario">("resumo");
   const [form, setForm]             = useState(EMPTY_FORM);
+  const [photos, setPhotos]         = useState<(File | null)[]>([null, null, null, null]);
+  const [previews, setPreviews]     = useState<(string | null)[]>([null, null, null, null]);
   const [saving, setSaving]         = useState(false);
   const [formError, setFormError]   = useState("");
+  const fileRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
 
   function loadPatients() {
     const supabase = createClient();
@@ -80,21 +77,35 @@ export default function PacientesPage() {
     setSelected(p);
     setModalTab(p.status === "awaiting_evaluation" ? "prontuario" : "resumo");
     setForm(EMPTY_FORM);
+    setPhotos([null, null, null, null]);
+    setPreviews([null, null, null, null]);
     setFormError("");
     setEvaluation(null);
-
     const supabase = createClient();
-    const { data } = await supabase
-      .from("evaluations")
-      .select("*")
-      .eq("patient_id", p.id)
-      .maybeSingle();
+    const { data } = await supabase.from("evaluations").select("*").eq("patient_id", p.id).maybeSingle();
     if (data) setEvaluation(data as Evaluation);
   }
 
-  function closeModal() {
-    setSelected(null);
-    setEvaluation(null);
+  function closeModal() { setSelected(null); setEvaluation(null); }
+
+  function handlePhotoSelect(index: number, file: File | null) {
+    if (!file) return;
+    const newPhotos   = [...photos];
+    const newPreviews = [...previews];
+    newPhotos[index]   = file;
+    newPreviews[index] = URL.createObjectURL(file);
+    setPhotos(newPhotos);
+    setPreviews(newPreviews);
+  }
+
+  function removePhoto(index: number) {
+    const newPhotos   = [...photos];
+    const newPreviews = [...previews];
+    if (newPreviews[index]) URL.revokeObjectURL(newPreviews[index]!);
+    newPhotos[index]   = null;
+    newPreviews[index] = null;
+    setPhotos(newPhotos);
+    setPreviews(newPreviews);
   }
 
   async function salvarAvaliacao() {
@@ -113,6 +124,17 @@ export default function PacientesPage() {
       });
       const json = await res.json();
       if (!res.ok) { setFormError(json.error ?? "Erro ao salvar."); return; }
+
+      // Upload das fotos para Supabase Storage
+      const supabase = createClient();
+      for (let i = 0; i < photos.length; i++) {
+        const file = photos[i];
+        if (!file) continue;
+        const ext  = file.name.split(".").pop();
+        const path = `${selected.id}/${Date.now()}-${i}.${ext}`;
+        await supabase.storage.from("avaliacoes").upload(path, file, { upsert: true });
+      }
+
       closeModal();
       loadPatients();
     } catch {
@@ -152,52 +174,40 @@ export default function PacientesPage() {
             <div className="table-scroll-wrap">
               <table className="g-table">
                 <thead>
-                  <tr>
-                    <th>Paciente</th>
-                    <th>Diagnóstico</th>
-                    <th>Pacote</th>
-                    <th>Pagamento</th>
-                    <th>Situação</th>
-                    <th />
-                  </tr>
+                  <tr><th>Paciente</th><th>Diagnóstico</th><th>Pacote</th><th>Pagamento</th><th>Situação</th><th /></tr>
                 </thead>
                 <tbody>
                   {filtered.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} style={{ textAlign: "center", color: "var(--gray-400)", padding: "40px" }}>
-                        {patients.length === 0 ? "Nenhum paciente cadastrado ainda." : "Nenhum resultado."}
-                      </td>
-                    </tr>
-                  ) : (
-                    filtered.map((p) => (
-                      <tr key={p.id} style={{ cursor: "pointer" }} onClick={() => openPatient(p)}>
-                        <td>
-                          <div className="person">
-                            <div className="avatar" style={{ background: p.status === "awaiting_evaluation" ? "var(--orange-50)" : "var(--teal-50)", color: p.status === "awaiting_evaluation" ? "var(--orange-700)" : "var(--teal-800)" }}>
-                              {initials(p.full_name)}
-                            </div>
-                            <div>
-                              <div className="person-name">
-                                {p.full_name}
-                                {p.guardian_name && <span className="muted text-xs"> (resp. {p.guardian_name})</span>}
-                              </div>
-                              <div className="person-sub">{p.phone}</div>
-                            </div>
+                    <tr><td colSpan={6} style={{ textAlign: "center", color: "var(--gray-400)", padding: "40px" }}>
+                      {patients.length === 0 ? "Nenhum paciente cadastrado ainda." : "Nenhum resultado."}
+                    </td></tr>
+                  ) : filtered.map((p) => (
+                    <tr key={p.id} style={{ cursor: "pointer" }} onClick={() => openPatient(p)}>
+                      <td>
+                        <div className="person">
+                          <div className="avatar" style={{ background: p.status === "awaiting_evaluation" ? "var(--orange-50)" : "var(--teal-50)", color: p.status === "awaiting_evaluation" ? "var(--orange-700)" : "var(--teal-800)" }}>
+                            {initials(p.full_name)}
                           </div>
-                        </td>
-                        <td className="text-sm muted">{p.diagnosis ?? "—"}</td>
-                        <td className="text-sm muted">—</td>
-                        <td><span className="badge badge-neutral">—</span></td>
-                        <td>
-                          <span className={`badge ${STATUS_BADGE[p.status] ?? "badge-neutral"}`}>
-                            {STATUS_ICON[p.status] && <i className={`ti ${STATUS_ICON[p.status]}`} style={{ fontSize: 11 }} />}
-                            {STATUS_LABEL[p.status] ?? p.status}
-                          </span>
-                        </td>
-                        <td><i className="ti ti-chevron-right muted" /></td>
-                      </tr>
-                    ))
-                  )}
+                          <div>
+                            <div className="person-name">
+                              {p.full_name}
+                              {p.guardian_name && <span className="muted text-xs"> (resp. {p.guardian_name})</span>}
+                            </div>
+                            <div className="person-sub">{p.phone}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="text-sm muted">{p.diagnosis ?? "—"}</td>
+                      <td className="text-sm muted">—</td>
+                      <td><span className="badge badge-neutral">—</span></td>
+                      <td>
+                        <span className={`badge ${STATUS_BADGE[p.status] ?? "badge-neutral"}`}>
+                          {STATUS_LABEL[p.status] ?? p.status}
+                        </span>
+                      </td>
+                      <td><i className="ti ti-chevron-right muted" /></td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -225,9 +235,7 @@ export default function PacientesPage() {
             <div className="table-scroll-wrap">
               <table className="g-table">
                 <thead><tr><th>Paciente</th><th>Valor do pacote</th><th>Vencimento</th><th>Situação</th><th /></tr></thead>
-                <tbody>
-                  <tr><td colSpan={5} style={{ textAlign: "center", color: "var(--gray-400)", padding: "32px" }}>Nenhum pacote cadastrado.</td></tr>
-                </tbody>
+                <tbody><tr><td colSpan={5} style={{ textAlign: "center", color: "var(--gray-400)", padding: "32px" }}>Nenhum pacote cadastrado.</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -250,7 +258,7 @@ export default function PacientesPage() {
       {/* ═══ Modal do paciente ═══ */}
       {selected && (
         <div className="modal-overlay active" onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
-          <div className="modal" style={{ maxWidth: 500 }}>
+          <div className="modal" style={{ maxWidth: 520 }}>
             <div className="modal-header">
               <h3>{selected.full_name}</h3>
               <button className="modal-close" onClick={closeModal}>&times;</button>
@@ -262,7 +270,6 @@ export default function PacientesPage() {
               </span>
             </div>
 
-            {/* Tabs do modal */}
             {selected.status !== "awaiting_evaluation" && (
               <div className="tabs" style={{ marginBottom: 14 }}>
                 <button className={`tab-btn${modalTab === "resumo" ? " active" : ""}`} onClick={() => setModalTab("resumo")}>Resumo</button>
@@ -275,12 +282,7 @@ export default function PacientesPage() {
             {modalTab === "resumo" && (
               <table style={{ fontSize: 13, width: "100%" }}>
                 <tbody>
-                  {[
-                    ["Telefone", selected.phone],
-                    ["Responsável", selected.guardian_name ?? "—"],
-                    ["Usuário do portal", selected.portal_username],
-                    ["Diagnóstico", selected.diagnosis ?? "—"],
-                  ].map(([label, val]) => (
+                  {[["Telefone", selected.phone], ["Responsável", selected.guardian_name ?? "—"], ["Usuário do portal", selected.portal_username], ["Diagnóstico", selected.diagnosis ?? "—"]].map(([label, val]) => (
                     <tr key={label}>
                       <td className="muted" style={{ padding: "6px 0", border: "none" }}>{label}</td>
                       <td style={{ padding: "6px 0", border: "none", textAlign: "right" }}>{val}</td>
@@ -299,11 +301,10 @@ export default function PacientesPage() {
             {modalTab === "prontuario" && (
               <>
                 {selected.status === "awaiting_evaluation" ? (
-                  /* Formulário de avaliação */
                   <>
                     <div className="alert-box info" style={{ marginBottom: 16 }}>
                       <i className="ti ti-info-circle" />
-                      <span>Ao salvar, o paciente poderá ver o prontuário e confirmar o pacote de 10 sessões no portal.</span>
+                      <span>Ao salvar, o paciente verá o prontuário e o QR code para pagamento do pacote.</span>
                     </div>
 
                     {formError && (
@@ -329,6 +330,46 @@ export default function PacientesPage() {
                       <textarea className="form-textarea" placeholder="Meta final do tratamento..." value={form.long_term_goal} onChange={(e) => setForm((f) => ({ ...f, long_term_goal: e.target.value }))} />
                     </div>
 
+                    {/* ── Fotos ── */}
+                    <div className="form-group">
+                      <label className="form-label">Fotos da avaliação</label>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginTop: 6 }}>
+                        {PHOTO_SLOTS.map((label, i) => (
+                          <div key={i}>
+                            <input
+                              ref={fileRefs[i]}
+                              type="file"
+                              accept="image/*"
+                              style={{ display: "none" }}
+                              onChange={(e) => handlePhotoSelect(i, e.target.files?.[0] ?? null)}
+                            />
+                            {previews[i] ? (
+                              <div style={{ position: "relative" }}>
+                                <img
+                                  src={previews[i]!}
+                                  alt={label}
+                                  style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: "1px solid var(--gray-200)" }}
+                                />
+                                <button
+                                  onClick={() => removePhoto(i)}
+                                  style={{ position: "absolute", top: 4, right: 4, width: 20, height: 20, borderRadius: "50%", background: "rgba(16,24,38,0.7)", color: "white", border: "none", cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}
+                                >✕</button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => fileRefs[i].current?.click()}
+                                style={{ width: "100%", aspectRatio: "1", background: "var(--gray-50)", border: "1.5px dashed var(--gray-200)", borderRadius: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, cursor: "pointer", color: "var(--gray-400)" }}
+                              >
+                                <i className="ti ti-camera-plus" style={{ fontSize: 20 }} />
+                                <span style={{ fontSize: 10, fontWeight: 600 }}>{label}</span>
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="text-xs muted mt-8">Fotos ficam no histórico clínico do paciente.</div>
+                    </div>
+
                     <div className="modal-actions">
                       <button className="btn btn-outline" onClick={closeModal} disabled={saving}>Cancelar</button>
                       <button className="btn btn-primary" onClick={salvarAvaliacao} disabled={saving}>
@@ -337,7 +378,6 @@ export default function PacientesPage() {
                     </div>
                   </>
                 ) : evaluation ? (
-                  /* Prontuário já preenchido */
                   <>
                     <span className="badge badge-success mb-16" style={{ display: "inline-flex" }}>
                       <i className="ti ti-file-check" style={{ fontSize: 11 }} />Avaliação concluída
@@ -350,11 +390,7 @@ export default function PacientesPage() {
                         </tr>
                       </tbody>
                     </table>
-                    {[
-                      ["Objetivo de curto prazo", evaluation.short_term_goal],
-                      ["Objetivo de médio prazo", evaluation.medium_term_goal],
-                      ["Objetivo de longo prazo", evaluation.long_term_goal],
-                    ].map(([label, val]) => (
+                    {[["Curto prazo", evaluation.short_term_goal], ["Médio prazo", evaluation.medium_term_goal], ["Longo prazo", evaluation.long_term_goal]].map(([label, val]) => (
                       <div key={label} style={{ marginBottom: 14 }}>
                         <div className="text-xs muted fw-600" style={{ textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>{label}</div>
                         <p className="text-sm">{val}</p>
