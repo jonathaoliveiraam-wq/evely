@@ -1,5 +1,13 @@
-import { createAdminClient } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+
+function adminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+}
 
 export async function POST(req: Request) {
   const formData     = await req.formData();
@@ -10,24 +18,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "evaluation_id e patient_id são obrigatórios." }, { status: 400 });
   }
 
-  const supabase = await createAdminClient();
-
-  await supabase.storage.createBucket("avaliacoes", { public: true }).catch(() => {});
-
-  const angles = ["front", "back", "right_side", "left_side"] as const;
-  let uploaded = 0;
+  const supabase = adminClient();
+  const angles   = ["front", "back", "right_side", "left_side"] as const;
+  let uploaded   = 0;
 
   for (const angle of angles) {
     const file = formData.get(`photo_${angle}`) as File | null;
     if (!file || file.size === 0) continue;
 
-    const ext  = file.name.split(".").pop() ?? "jpg";
-    const path = `${patient_id}/${evaluation_id}/${angle}.${ext}`;
+    const path = `${patient_id}/${evaluation_id}/${angle}.jpg`;
+    const buf  = Buffer.from(await file.arrayBuffer());
 
-    const arrayBuffer = await file.arrayBuffer();
     const { error: upErr } = await supabase.storage
       .from("avaliacoes")
-      .upload(path, Buffer.from(arrayBuffer), { upsert: true, contentType: file.type });
+      .upload(path, buf, { upsert: true, contentType: "image/jpeg" });
 
     if (!upErr) {
       await supabase.from("evaluation_photos")

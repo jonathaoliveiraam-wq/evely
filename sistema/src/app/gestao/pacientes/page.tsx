@@ -179,51 +179,25 @@ export default function PacientesPage() {
     if (!selected || !evaluation) return;
     setUploadingPhotos(true);
     try {
-      // 1. Monta lista de fotos selecionadas
-      const selected_photos = PHOTO_SLOTS
-        .map(({ angle }, i) => ({ angle, file: addPhotos[i] }))
-        .filter(({ file }) => !!file);
+      const fd = new FormData();
+      fd.append("evaluation_id", evaluation.id);
+      fd.append("patient_id",    selected.id);
 
-      if (selected_photos.length === 0) return;
-
-      // 2. Pede URLs assinadas ao servidor (request pequeno)
-      const signRes = await fetch("/api/avaliacoes/fotos/sign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          evaluation_id: evaluation.id,
-          patient_id: selected.id,
-          angles: selected_photos.map((p) => p.angle),
-        }),
-      });
-      const { urls, error: signErr } = await signRes.json();
-      if (!signRes.ok) { alert(signErr ?? "Erro ao gerar URLs."); return; }
-
-      // 3. Comprime e sobe cada foto DIRETO para o Supabase (sem passar pelo Vercel)
-      const saved: { angle: string; path: string }[] = [];
-      for (const { signedUrl, angle, path } of urls) {
-        const photo = selected_photos.find((p) => p.angle === angle);
-        if (!photo?.file) continue;
-        const compressed = await compressImage(photo.file);
-        const uploadRes = await fetch(signedUrl, {
-          method: "PUT",
-          body: compressed,
-          headers: { "Content-Type": "image/jpeg" },
-        });
-        if (uploadRes.ok) saved.push({ angle, path });
+      let hasPhoto = false;
+      for (let i = 0; i < PHOTO_SLOTS.length; i++) {
+        const file = addPhotos[i];
+        if (!file) continue;
+        const compressed = await compressImage(file);
+        fd.append(`photo_${PHOTO_SLOTS[i].angle}`, new File([compressed], `${PHOTO_SLOTS[i].angle}.jpg`, { type: "image/jpeg" }));
+        hasPhoto = true;
       }
 
-      if (saved.length === 0) { alert("Nenhuma foto foi enviada. Tente novamente."); return; }
+      if (!hasPhoto) return;
 
-      // 4. Registra os caminhos no banco (request pequeno)
-      const confirmRes = await fetch("/api/avaliacoes/fotos/confirm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ evaluation_id: evaluation.id, paths: saved }),
-      });
-      if (!confirmRes.ok) { alert("Erro ao salvar no banco."); return; }
+      const res  = await fetch("/api/avaliacoes/fotos", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) { alert(json.error ?? "Erro ao enviar fotos."); return; }
 
-      // 5. Recarrega fotos na tela
       const supabase = createClient();
       const { data: ph } = await supabase.from("evaluation_photos").select("angle, storage_path").eq("evaluation_id", evaluation.id);
       setPhotos((ph as EvaluationPhoto[]) ?? []);
@@ -276,34 +250,21 @@ export default function PacientesPage() {
       const json = await res.json();
       if (!res.ok) { setFormError(json.error ?? "Erro ao salvar."); return; }
 
-      // Upload direto das fotos (se houver) após salvar avaliação
-      const selectedNewPhotos = PHOTO_SLOTS
-        .map(({ angle }, i) => ({ angle, file: newPhotos[i] }))
-        .filter(({ file }) => !!file);
-
-      if (selectedNewPhotos.length > 0 && json.evaluation_id) {
-        const signRes = await fetch("/api/avaliacoes/fotos/sign", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ evaluation_id: json.evaluation_id, patient_id: selected.id, angles: selectedNewPhotos.map((p) => p.angle) }),
-        });
-        if (signRes.ok) {
-          const { urls } = await signRes.json();
-          const saved: { angle: string; path: string }[] = [];
-          for (const { signedUrl, angle, path } of (urls ?? [])) {
-            const photo = selectedNewPhotos.find((p) => p.angle === angle);
-            if (!photo?.file) continue;
-            const compressed = await compressImage(photo.file);
-            const upRes = await fetch(signedUrl, { method: "PUT", body: compressed, headers: { "Content-Type": "image/jpeg" } });
-            if (upRes.ok) saved.push({ angle, path });
-          }
-          if (saved.length > 0) {
-            await fetch("/api/avaliacoes/fotos/confirm", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ evaluation_id: json.evaluation_id, paths: saved }),
-            });
-          }
+      // Upload das fotos após salvar avaliação
+      if (json.evaluation_id) {
+        const photoFd = new FormData();
+        photoFd.append("evaluation_id", json.evaluation_id);
+        photoFd.append("patient_id",    selected.id);
+        let hasPhoto = false;
+        for (let i = 0; i < PHOTO_SLOTS.length; i++) {
+          const file = newPhotos[i];
+          if (!file) continue;
+          const compressed = await compressImage(file);
+          photoFd.append(`photo_${PHOTO_SLOTS[i].angle}`, new File([compressed], `${PHOTO_SLOTS[i].angle}.jpg`, { type: "image/jpeg" }));
+          hasPhoto = true;
+        }
+        if (hasPhoto) {
+          await fetch("/api/avaliacoes/fotos", { method: "POST", body: photoFd });
         }
       }
 
