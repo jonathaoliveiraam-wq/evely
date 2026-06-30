@@ -77,8 +77,19 @@ export default function PacientesPage() {
   const [saving, setSaving]         = useState(false);
   const [formError, setFormError]   = useState("");
   const [lightbox, setLightbox]     = useState<string | null>(null);
+  const [addingPhotos, setAddingPhotos] = useState(false);
+  const [addPhotos, setAddPhotos]   = useState<(File | null)[]>([null, null, null, null]);
+  const [addPreviews, setAddPreviews] = useState<(string | null)[]>([null, null, null, null]);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
 
   const fileRefs = [
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+  ];
+
+  const addFileRefs = [
     useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
@@ -123,7 +134,50 @@ export default function PacientesPage() {
     }
   }
 
-  function closeModal() { setSelected(null); setEvaluation(null); setPhotos([]); }
+  function closeModal() {
+    setSelected(null); setEvaluation(null); setPhotos([]);
+    setAddingPhotos(false); setAddPhotos([null,null,null,null]); setAddPreviews([null,null,null,null]);
+  }
+
+  function handleAddPhotoSelect(index: number, file: File | null) {
+    if (!file) return;
+    const np = [...addPhotos]; const pp = [...addPreviews];
+    np[index] = file; pp[index] = URL.createObjectURL(file);
+    setAddPhotos(np); setAddPreviews(pp);
+  }
+
+  function removeAddPhoto(index: number) {
+    const np = [...addPhotos]; const pp = [...addPreviews];
+    if (pp[index]) URL.revokeObjectURL(pp[index]!);
+    np[index] = null; pp[index] = null;
+    setAddPhotos(np); setAddPreviews(pp);
+  }
+
+  async function salvarFotos() {
+    if (!selected || !evaluation) return;
+    setUploadingPhotos(true);
+    try {
+      const fd = new FormData();
+      fd.append("evaluation_id", evaluation.id);
+      fd.append("patient_id",    selected.id);
+      PHOTO_SLOTS.forEach(({ angle }, i) => {
+        const file = addPhotos[i];
+        if (file) fd.append(`photo_${angle}`, file);
+      });
+      const res  = await fetch("/api/avaliacoes/fotos", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) { alert(json.error ?? "Erro ao enviar fotos."); return; }
+      // Recarrega as fotos
+      const supabase = createClient();
+      const { data: ph } = await supabase.from("evaluation_photos").select("angle, storage_path").eq("evaluation_id", evaluation.id);
+      setPhotos((ph as EvaluationPhoto[]) ?? []);
+      setAddingPhotos(false);
+      setAddPhotos([null,null,null,null]);
+      setAddPreviews([null,null,null,null]);
+    } finally {
+      setUploadingPhotos(false);
+    }
+  }
 
   function handlePhotoSelect(index: number, file: File | null) {
     if (!file) return;
@@ -379,21 +433,71 @@ export default function PacientesPage() {
                       </div>
                     ))}
 
-                    {photos.length > 0 && (
-                      <div style={{ marginTop: 16 }}>
-                        <div className="text-xs muted fw-600" style={{ textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>Fotos da avaliação</div>
+                    {/* Fotos existentes ou modo de adicionar */}
+                    <div style={{ marginTop: 16 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                        <div className="text-xs muted fw-600" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>Fotos da avaliação</div>
+                        {!addingPhotos && (
+                          <button
+                            onClick={() => setAddingPhotos(true)}
+                            style={{ fontSize: 12, fontWeight: 600, color: "var(--teal-700)", background: "var(--teal-50)", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+                          >
+                            <i className="ti ti-camera-plus" style={{ fontSize: 13 }} />
+                            {photos.length === 0 ? "Adicionar fotos" : "Atualizar fotos"}
+                          </button>
+                        )}
+                      </div>
+
+                      {addingPhotos ? (
+                        <>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+                            {PHOTO_SLOTS.map(({ label, angle }, i) => {
+                              const existing = photos.find((p) => p.angle === angle);
+                              return (
+                                <div key={angle}>
+                                  <input ref={addFileRefs[i]} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => handleAddPhotoSelect(i, e.target.files?.[0] ?? null)} />
+                                  {addPreviews[i] ? (
+                                    <div style={{ position: "relative" }}>
+                                      <img src={addPreviews[i]!} alt={label} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: "2px solid var(--teal-400)" }} />
+                                      <button onClick={() => removeAddPhoto(i)} style={{ position: "absolute", top: 4, right: 4, width: 20, height: 20, borderRadius: "50%", background: "rgba(16,24,38,0.7)", color: "white", border: "none", cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                                    </div>
+                                  ) : (
+                                    <button onClick={() => addFileRefs[i].current?.click()} style={{ width: "100%", aspectRatio: "1", background: existing ? "none" : "var(--gray-50)", border: "none", borderRadius: 8, padding: 0, cursor: "pointer", position: "relative", overflow: "hidden" }}>
+                                      {existing ? (
+                                        <>
+                                          <img src={photoPublicUrl(existing.storage_path)} alt={label} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 8, opacity: 0.5 }} />
+                                          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2 }}>
+                                            <i className="ti ti-refresh" style={{ color: "var(--gray-700)", fontSize: 18 }} />
+                                            <span style={{ fontSize: 9, fontWeight: 700, color: "var(--gray-700)" }}>Trocar</span>
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <div style={{ width: "100%", height: "100%", border: "1.5px dashed var(--gray-200)", borderRadius: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, color: "var(--gray-400)" }}>
+                                          <i className="ti ti-camera-plus" style={{ fontSize: 20 }} />
+                                          <span style={{ fontSize: 10, fontWeight: 600 }}>{label}</span>
+                                        </div>
+                                      )}
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                            <button className="btn btn-outline" onClick={() => { setAddingPhotos(false); setAddPhotos([null,null,null,null]); setAddPreviews([null,null,null,null]); }} disabled={uploadingPhotos} style={{ flex: 1 }}>Cancelar</button>
+                            <button className="btn btn-primary" onClick={salvarFotos} disabled={uploadingPhotos || addPhotos.every((f) => !f)} style={{ flex: 2 }}>
+                              <i className="ti ti-upload" />{uploadingPhotos ? "Enviando..." : "Salvar fotos"}
+                            </button>
+                          </div>
+                        </>
+                      ) : (
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
                           {PHOTO_SLOTS.map(({ label, angle }) => {
                             const ph = photos.find((p) => p.angle === angle);
                             return ph ? (
                               <div key={angle} style={{ position: "relative" }}>
-                                <img
-                                  src={photoPublicUrl(ph.storage_path)}
-                                  alt={label}
-                                  onClick={() => setLightbox(photoPublicUrl(ph.storage_path))}
-                                  style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: "1px solid var(--gray-200)", cursor: "zoom-in" }}
-                                />
-                                <div style={{ position: "absolute", bottom: 4, left: 0, right: 0, textAlign: "center", fontSize: 9, fontWeight: 700, color: "white", textShadow: "0 1px 3px rgba(0,0,0,0.7)", textTransform: "uppercase", letterSpacing: "0.03em" }}>{label}</div>
+                                <img src={photoPublicUrl(ph.storage_path)} alt={label} onClick={() => setLightbox(photoPublicUrl(ph.storage_path))} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: "1px solid var(--gray-200)", cursor: "zoom-in" }} />
+                                <div style={{ position: "absolute", bottom: 4, left: 0, right: 0, textAlign: "center", fontSize: 9, fontWeight: 700, color: "white", textShadow: "0 1px 3px rgba(0,0,0,0.7)", textTransform: "uppercase" }}>{label}</div>
                               </div>
                             ) : (
                               <div key={angle} style={{ aspectRatio: "1", background: "var(--gray-50)", borderRadius: 8, border: "1px dashed var(--gray-200)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -402,8 +506,8 @@ export default function PacientesPage() {
                             );
                           })}
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
 
                     <div className="modal-actions" style={{ marginTop: 20 }}>
                       <button className="btn btn-outline btn-block" onClick={closeModal}>Fechar</button>
