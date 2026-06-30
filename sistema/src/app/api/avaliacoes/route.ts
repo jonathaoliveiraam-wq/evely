@@ -30,26 +30,6 @@ export async function POST(req: Request) {
 
   await supabase.from("patients").update({ diagnosis, status: "awaiting_payment" }).eq("id", patient_id);
 
-  // Garante que o bucket existe (público para leitura)
-  await supabase.storage.createBucket("avaliacoes", { public: true }).catch(() => {});
-
-  const angles = ["front", "back", "right_side", "left_side"] as const;
-  for (const angle of angles) {
-    const file = formData.get(`photo_${angle}`) as File | null;
-    if (!file || file.size === 0) continue;
-
-    const ext  = file.name.split(".").pop() ?? "jpg";
-    const path = `${patient_id}/${evaluation.id}/${angle}.${ext}`;
-
-    const arrayBuffer = await file.arrayBuffer();
-    const { error: upErr } = await supabase.storage
-      .from("avaliacoes")
-      .upload(path, Buffer.from(arrayBuffer), { upsert: true, contentType: file.type });
-
-    if (!upErr) {
-      await supabase.from("evaluation_photos").insert({ evaluation_id: evaluation.id, angle, storage_path: path });
-    }
-  }
-
-  return NextResponse.json({ ok: true });
+  // Retorna o ID para o cliente fazer upload direto das fotos
+  return NextResponse.json({ ok: true, evaluation_id: evaluation.id });
 }
