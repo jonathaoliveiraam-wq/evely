@@ -8,7 +8,7 @@ const supabaseConfigured =
   SUPABASE_URL.startsWith("http") && SUPABASE_ANON.length > 10;
 
 export async function proxy(request: NextRequest) {
-  const response = NextResponse.next({ request });
+  let response = NextResponse.next({ request });
   const pathname = request.nextUrl.pathname;
 
   // Rotas sempre públicas
@@ -28,6 +28,7 @@ export async function proxy(request: NextRequest) {
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        response = NextResponse.next({ request });
         cookiesToSet.forEach(({ name, value, options }) =>
           response.cookies.set(name, value, options)
         );
