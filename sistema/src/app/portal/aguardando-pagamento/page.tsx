@@ -148,32 +148,31 @@ export default function AguardandoPagamentoPage() {
                   </div>
                 ))}
 
-                {/* Fotos */}
-                {photos.length > 0 && (
-                  <div style={{ paddingTop: 12, borderTop: "1px solid var(--color-gray-100)" }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: "var(--color-gray-400)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Fotos da avaliação</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
-                      {PHOTO_SLOTS.map(({ label, angle }) => {
-                        const ph = photos.find((p) => p.angle === angle);
-                        return ph ? (
-                          <div key={angle} style={{ position: "relative" }}>
-                            <img
-                              src={photoPublicUrl(ph.storage_path)}
-                              alt={label}
-                              onClick={() => setLightbox(photoPublicUrl(ph.storage_path))}
-                              style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: "1px solid var(--color-gray-200)", cursor: "zoom-in" }}
-                            />
-                            <div style={{ position: "absolute", bottom: 3, left: 0, right: 0, textAlign: "center", fontSize: 8, fontWeight: 700, color: "white", textShadow: "0 1px 3px rgba(0,0,0,0.7)", textTransform: "uppercase" }}>{label}</div>
-                          </div>
-                        ) : (
-                          <div key={angle} style={{ aspectRatio: "1", background: "var(--color-gray-50)", borderRadius: 8, border: "1px dashed var(--color-gray-200)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <i className="ti ti-photo-off" style={{ color: "var(--color-gray-300)", fontSize: 14 }} />
-                          </div>
-                        );
-                      })}
-                    </div>
+                {/* Fotos — sempre visível */}
+                <div style={{ paddingTop: 12, borderTop: "1px solid var(--color-gray-100)" }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "var(--color-gray-400)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Fotos da avaliação</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+                    {PHOTO_SLOTS.map(({ label, angle }) => {
+                      const ph = photos.find((p) => p.angle === angle);
+                      return ph ? (
+                        <div key={angle} style={{ position: "relative" }}>
+                          <img
+                            src={photoPublicUrl(ph.storage_path)}
+                            alt={label}
+                            onClick={() => setLightbox(photoPublicUrl(ph.storage_path))}
+                            style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: "1px solid var(--color-gray-200)", cursor: "zoom-in" }}
+                          />
+                          <div style={{ position: "absolute", bottom: 3, left: 0, right: 0, textAlign: "center", fontSize: 8, fontWeight: 700, color: "white", textShadow: "0 1px 3px rgba(0,0,0,0.7)", textTransform: "uppercase" }}>{label}</div>
+                        </div>
+                      ) : (
+                        <div key={angle} style={{ aspectRatio: "1", background: "var(--color-gray-50)", borderRadius: 8, border: "1px dashed var(--color-gray-200)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3 }}>
+                          <i className="ti ti-photo-off" style={{ color: "var(--color-gray-300)", fontSize: 14 }} />
+                          <span style={{ fontSize: 8, color: "var(--color-gray-300)", fontWeight: 600, textTransform: "uppercase" }}>{label}</span>
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
+                </div>
               </div>
             )}
           </div>

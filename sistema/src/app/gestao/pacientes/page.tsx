@@ -81,6 +81,7 @@ export default function PacientesPage() {
   const [addPhotos, setAddPhotos]   = useState<(File | null)[]>([null, null, null, null]);
   const [addPreviews, setAddPreviews] = useState<(string | null)[]>([null, null, null, null]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [photosSaved, setPhotosSaved]         = useState(false);
 
   const fileRefs = [
     useRef<HTMLInputElement>(null),
@@ -135,8 +136,10 @@ export default function PacientesPage() {
   }
 
   function closeModal() {
+    if (uploadingPhotos) return; // bloqueia fechar durante upload
     setSelected(null); setEvaluation(null); setPhotos([]);
     setAddingPhotos(false); setAddPhotos([null,null,null,null]); setAddPreviews([null,null,null,null]);
+    setPhotosSaved(false);
   }
 
   function handleAddPhotoSelect(index: number, file: File | null) {
@@ -174,6 +177,7 @@ export default function PacientesPage() {
       setAddingPhotos(false);
       setAddPhotos([null,null,null,null]);
       setAddPreviews([null,null,null,null]);
+      setPhotosSaved(true);
     } finally {
       setUploadingPhotos(false);
     }
@@ -329,7 +333,7 @@ export default function PacientesPage() {
           <div className="modal" style={{ maxWidth: 540 }}>
             <div className="modal-header">
               <h3>{selected.full_name}</h3>
-              <button className="modal-close" onClick={closeModal}>&times;</button>
+              <button className="modal-close" onClick={closeModal} disabled={uploadingPhotos}>&times;</button>
             </div>
             <div className="g-flex gap-8 mb-16">
               <span className={`badge ${STATUS_BADGE[selected.status] ?? "badge-neutral"}`}>{STATUS_LABEL[selected.status]}</span>
@@ -439,7 +443,7 @@ export default function PacientesPage() {
                         <div className="text-xs muted fw-600" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>Fotos da avaliação</div>
                         {!addingPhotos && (
                           <button
-                            onClick={() => setAddingPhotos(true)}
+                            onClick={() => { setAddingPhotos(true); setPhotosSaved(false); }}
                             style={{ fontSize: 12, fontWeight: 600, color: "var(--teal-700)", background: "var(--teal-50)", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
                           >
                             <i className="ti ti-camera-plus" style={{ fontSize: 13 }} />
@@ -509,7 +513,13 @@ export default function PacientesPage() {
                       )}
                     </div>
 
-                    <div className="modal-actions" style={{ marginTop: 20 }}>
+                    {photosSaved && (
+                      <div className="alert-box success" style={{ marginTop: 16 }}>
+                        <i className="ti ti-circle-check" /><span>Fotos salvas com sucesso!</span>
+                      </div>
+                    )}
+
+                    <div className="modal-actions" style={{ marginTop: 12 }}>
                       <button className="btn btn-outline btn-block" onClick={closeModal}>Fechar</button>
                     </div>
                   </>
