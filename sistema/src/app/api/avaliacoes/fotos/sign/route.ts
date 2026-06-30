@@ -1,5 +1,14 @@
-import { createAdminClient } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+
+// Cliente puro com service role — bypassa RLS do storage
+function adminStorage() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+}
 
 export async function POST(req: Request) {
   const { evaluation_id, patient_id, angles } = await req.json() as {
@@ -12,8 +21,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Parâmetros inválidos." }, { status: 400 });
   }
 
-  const supabase = await createAdminClient();
-
+  const supabase = adminStorage();
   const urls: { angle: string; signedUrl: string; path: string }[] = [];
 
   for (const angle of angles) {
@@ -23,7 +31,10 @@ export async function POST(req: Request) {
       .createSignedUploadUrl(path);
 
     if (error || !data) {
-      return NextResponse.json({ error: `Erro ao gerar URL para ${angle}: ${error?.message}` }, { status: 500 });
+      return NextResponse.json(
+        { error: `Erro ao gerar URL para ${angle}: ${error?.message}` },
+        { status: 500 }
+      );
     }
 
     urls.push({ angle, signedUrl: data.signedUrl, path });
