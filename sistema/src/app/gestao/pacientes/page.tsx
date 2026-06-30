@@ -78,6 +78,11 @@ export default function PacientesPage() {
   const [formError, setFormError]   = useState("");
   const [lightbox, setLightbox]     = useState<string | null>(null);
   const [addingPhotos, setAddingPhotos] = useState(false);
+
+  // ── Ativar pacote ──
+  const [activating, setActivating] = useState<Patient | null>(null);
+  const [pkgForm, setPkgForm] = useState({ price: "", payment: "paid" as "paid" | "pending", startDate: new Date().toISOString().split("T")[0], completedSessions: 0 });
+  const [pkgSaving, setPkgSaving] = useState(false);
   const [addPhotos, setAddPhotos]   = useState<(File | null)[]>([null, null, null, null]);
   const [addPreviews, setAddPreviews] = useState<(string | null)[]>([null, null, null, null]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
@@ -140,6 +145,44 @@ export default function PacientesPage() {
     setSelected(null); setEvaluation(null); setPhotos([]);
     setAddingPhotos(false); setAddPhotos([null,null,null,null]); setAddPreviews([null,null,null,null]);
     setPhotosSaved(false);
+  }
+
+  async function ativarPacote() {
+    if (!activating) return;
+    const priceNum = parseFloat(pkgForm.price.replace(",", "."));
+    if (!priceNum || priceNum <= 0) { alert("Informe o valor do pacote."); return; }
+    setPkgSaving(true);
+    try {
+      const res = await fetch("/api/pacotes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patient_id: activating.id,
+          price_cents: Math.round(priceNum * 100),
+          payment_status: pkgForm.payment,
+          start_date: pkgForm.startDate,
+          completed_sessions: pkgForm.completedSessions,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) { alert(json.error ?? "Erro ao ativar pacote."); return; }
+      setActivating(null);
+      setPkgForm({ price: "", payment: "paid", startDate: new Date().toISOString().split("T")[0], completedSessions: 0 });
+      await loadPatients();
+    } finally {
+      setPkgSaving(false);
+    }
+  }
+
+  async function desativarPacote(patientId: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm("Desativar este paciente?")) return;
+    await fetch("/api/pacotes/desativar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ patient_id: patientId }),
+    });
+    await loadPatients();
   }
 
   function handleAddPhotoSelect(index: number, file: File | null) {
@@ -331,7 +374,29 @@ export default function PacientesPage() {
                       <td className="text-sm muted">—</td>
                       <td><span className="badge badge-neutral">—</span></td>
                       <td><span className={`badge ${STATUS_BADGE[p.status] ?? "badge-neutral"}`}>{STATUS_LABEL[p.status] ?? p.status}</span></td>
-                      <td><i className="ti ti-chevron-right muted" /></td>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        {p.status === "awaiting_payment" && (
+                          <button
+                            className="btn btn-primary btn-sm"
+                            style={{ fontSize: 11, padding: "4px 10px" }}
+                            onClick={(e) => { e.stopPropagation(); setActivating(p); setPkgForm({ price: "", payment: "paid", startDate: new Date().toISOString().split("T")[0], completedSessions: 0 }); }}
+                          >
+                            <i className="ti ti-player-play" /> Ativar
+                          </button>
+                        )}
+                        {p.status === "active" && (
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            style={{ fontSize: 11, padding: "4px 10px", color: "var(--red-600)" }}
+                            onClick={(e) => desativarPacote(p.id, e)}
+                          >
+                            <i className="ti ti-player-pause" /> Desativar
+                          </button>
+                        )}
+                        {p.status !== "awaiting_payment" && p.status !== "active" && (
+                          <i className="ti ti-chevron-right muted" />
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -576,6 +641,106 @@ export default function PacientesPage() {
                 )}
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Modal: Ativar Pacote ═══ */}
+      {activating && (
+        <div className="modal-overlay active" onClick={(e) => { if (e.target === e.currentTarget && !pkgSaving) setActivating(null); }}>
+          <div className="modal" style={{ maxWidth: 460 }}>
+            <div className="modal-header">
+              <h3>Ativar pacote — {activating.full_name}</h3>
+              <button className="modal-close" onClick={() => setActivating(null)} disabled={pkgSaving}>&times;</button>
+            </div>
+
+            {/* Valor */}
+            <div className="form-group">
+              <label className="form-label">Valor do pacote (R$)</label>
+              <input
+                className="form-input"
+                type="text"
+                placeholder="Ex: 450,00"
+                value={pkgForm.price}
+                onChange={(e) => setPkgForm(f => ({ ...f, price: e.target.value }))}
+              />
+            </div>
+
+            {/* Pagamento */}
+            <div className="form-group">
+              <label className="form-label">Status do pagamento</label>
+              <div className="g-flex gap-12" style={{ marginTop: 6 }}>
+                {(["paid", "pending"] as const).map((v) => (
+                  <label key={v} className="g-flex gap-8" style={{ cursor: "pointer", alignItems: "center", fontSize: 14 }}>
+                    <input type="radio" name="payment" checked={pkgForm.payment === v} onChange={() => setPkgForm(f => ({ ...f, payment: v }))} />
+                    {v === "paid" ? "✅ Pago" : "⏳ Pendente"}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Datas */}
+            <div className="g-grid grid-2" style={{ gap: 12 }}>
+              <div className="form-group">
+                <label className="form-label">Data de início</label>
+                <input
+                  className="form-input"
+                  type="date"
+                  value={pkgForm.startDate}
+                  onChange={(e) => setPkgForm(f => ({ ...f, startDate: e.target.value }))}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Data de fim (auto)</label>
+                <input
+                  className="form-input"
+                  type="date"
+                  readOnly
+                  value={pkgForm.startDate ? new Date(new Date(pkgForm.startDate).getTime() + 30 * 86400000).toISOString().split("T")[0] : ""}
+                  style={{ background: "var(--gray-50)", color: "var(--gray-500)" }}
+                />
+              </div>
+            </div>
+
+            {/* 10 bolinhas de sessão */}
+            <div className="form-group">
+              <label className="form-label">Sessões já realizadas — clique para marcar</label>
+              <div className="g-flex gap-8" style={{ marginTop: 10, flexWrap: "wrap" }}>
+                {Array.from({ length: 10 }, (_, i) => {
+                  const n = i + 1;
+                  const done = n <= pkgForm.completedSessions;
+                  return (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setPkgForm(f => ({ ...f, completedSessions: f.completedSessions === n ? n - 1 : n }))}
+                      title={`Sessão ${n}`}
+                      style={{
+                        width: 38, height: 38, borderRadius: "50%",
+                        border: done ? "2px solid var(--teal-700)" : "2px solid var(--gray-300)",
+                        background: done ? "var(--teal-600)" : "transparent",
+                        color: done ? "#fff" : "var(--gray-500)",
+                        fontWeight: 700, fontSize: 13, cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      {done ? <i className="ti ti-check" /> : n}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="text-xs muted" style={{ marginTop: 6 }}>
+                {pkgForm.completedSessions === 0 ? "Nenhuma sessão feita ainda." : `${pkgForm.completedSessions} sessão${pkgForm.completedSessions > 1 ? "ões" : ""} já realizada${pkgForm.completedSessions > 1 ? "s" : ""}.`}
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ marginTop: 20, display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button className="btn btn-ghost" onClick={() => setActivating(null)} disabled={pkgSaving}>Cancelar</button>
+              <button className="btn btn-primary" onClick={ativarPacote} disabled={pkgSaving}>
+                {pkgSaving ? "Ativando…" : "Ativar pacote"}
+              </button>
+            </div>
           </div>
         </div>
       )}

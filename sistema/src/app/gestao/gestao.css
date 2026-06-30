@@ -105,6 +105,9 @@
 .btn-sm { padding: 6px 12px; font-size: 12px; }
 .btn-block { width: 100%; justify-content: center; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-ghost { background: transparent; color: var(--gray-600); border-color: transparent; }
+.btn-ghost:hover { background: var(--gray-100); }
+.modal-footer { margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px; }
 
 /* ---------- Cards & grid ---------- */
 .g-grid { display: grid; gap: 16px; }
