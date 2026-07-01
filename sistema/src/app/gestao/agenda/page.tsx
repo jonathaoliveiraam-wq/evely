@@ -247,17 +247,26 @@ function SessionCard({
 
       {/* Actions */}
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        {session.status !== "completed" && session.status !== "cancelled" && (
-          <button
-            className="btn btn-sm"
-            onClick={() => onFinalizar(session)}
-            disabled={isLoading}
-            style={{ background: "var(--teal-600)", color: "#fff", border: "none", fontSize: 12 }}
-          >
-            <i className="ti ti-circle-check" style={{ marginRight: 4 }} />
-            {isLoading ? "..." : "Finalizar sessão"}
-          </button>
-        )}
+        {session.status !== "completed" && session.status !== "cancelled" && (() => {
+          const ready = session.status === "checked_in" || session.status === "in_progress";
+          return (
+            <button
+              className={`btn btn-sm ${ready ? "" : "btn-outline"}`}
+              onClick={ready ? () => onFinalizar(session) : undefined}
+              disabled={!ready || isLoading}
+              style={{
+                fontSize: 12, minWidth: 148,
+                ...(ready
+                  ? { background: "var(--teal-600)", color: "#fff", border: "none" }
+                  : { color: "var(--gray-400)", borderColor: "var(--gray-200)" }
+                ),
+              }}
+            >
+              <i className={`ti ${ready ? "ti-circle-check" : "ti-clock"}`} style={{ marginRight: 4 }} />
+              {isLoading ? "..." : ready ? "Finalizar sessão" : "Aguardando check-in"}
+            </button>
+          );
+        })()}
         {session.status === "completed" && (
           <span style={{ color: "var(--green-600)", fontSize: 13 }}>
             <i className="ti ti-check" style={{ marginRight: 4 }} />

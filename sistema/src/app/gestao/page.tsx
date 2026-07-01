@@ -182,27 +182,23 @@ export default function GestaoPage() {
                       <div className="list-name">{name}</div>
                       <div className="list-meta">Sessão {session.session_number}/10 · {STATUS_LABEL[session.status] ?? session.status}</div>
                     </div>
-                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      {/* Marcar check-in (só se ainda scheduled) */}
-                      {session.status === "scheduled" && (
-                        <button
-                          className="btn btn-outline btn-sm"
-                          onClick={() => fazerCheckin(session.id)}
-                          disabled={isLoading}
-                          style={{ fontSize: 11 }}
-                        >
-                          {isLoading ? "…" : <><i className="ti ti-login" /> Check-in</>}
-                        </button>
-                      )}
-                      {/* Finalizar — disponível para qualquer status ativo */}
-                      <button
-                        className="btn btn-primary btn-sm"
-                        onClick={() => openFinalizar(session)}
-                        disabled={isLoading}
-                        style={{ fontSize: 11 }}
-                      >
-                        <i className="ti ti-circle-check" /> Finalizar
-                      </button>
+                    <div>
+                      {(() => {
+                        const ready = session.status === "checked_in" || session.status === "in_progress";
+                        return (
+                          <button
+                            className={`btn btn-sm ${ready ? "btn-primary" : "btn-outline"}`}
+                            onClick={ready ? () => openFinalizar(session) : undefined}
+                            disabled={!ready || isLoading}
+                            style={{ fontSize: 11, minWidth: 150, ...(ready ? {} : { color: "var(--gray-400)", borderColor: "var(--gray-200)" }) }}
+                          >
+                            {ready
+                              ? <><i className="ti ti-circle-check" /> Finalizar sessão</>
+                              : <><i className="ti ti-clock" /> Aguardando check-in</>
+                            }
+                          </button>
+                        );
+                      })()}
                     </div>
                   </div>
                 );
