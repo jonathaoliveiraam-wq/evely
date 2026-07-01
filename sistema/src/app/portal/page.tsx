@@ -24,6 +24,7 @@ type Session = {
   evolution_notes: string | null;
   activities_notes: string | null;
   recommendation_notes: string | null;
+  photos: string[] | null;
 };
 
 type Patient = { id: string; full_name: string; status: string };
@@ -65,7 +66,7 @@ export default function PortalAtivoPage() {
     const supabase = createClient();
     const { data } = await supabase
       .from("sessions")
-      .select("id, session_number, scheduled_date, scheduled_time, status, checked_in_at, completed_at, was_punctual, did_activities, evolution_notes, activities_notes, recommendation_notes")
+      .select("id, session_number, scheduled_date, scheduled_time, status, checked_in_at, completed_at, was_punctual, did_activities, evolution_notes, activities_notes, recommendation_notes, photos")
       .eq("package_id", packageId)
       .order("session_number");
     setSessions((data as Session[]) ?? []);
@@ -95,6 +96,21 @@ export default function PortalAtivoPage() {
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Realtime: atualiza sessões automaticamente quando status muda
+  useEffect(() => {
+    if (!pkg) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel("portal-sessions-rt-" + pkg.id)
+      .on("postgres_changes", {
+        event: "UPDATE", schema: "public", table: "sessions",
+        filter: `package_id=eq.${pkg.id}`,
+      }, () => { loadSessions(pkg.id); })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pkg?.id]);
 
   const completedSessions = sessions.filter(s => s.status === "completed");
   const completedCount = completedSessions.length;
@@ -439,6 +455,20 @@ export default function PortalAtivoPage() {
             )}
             {!histDetail.evolution_notes && !histDetail.activities_notes && !histDetail.recommendation_notes && (
               <p style={{ fontSize: 14, color: "#94a3b8", textAlign: "center", margin: "20px 0" }}>Nenhuma anotação registrada para esta sessão.</p>
+            )}
+
+            {/* Fotos */}
+            {histDetail.photos && histDetail.photos.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 11, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Fotos</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  {histDetail.photos.map((url, i) => (
+                    <a key={i} href={url} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 10, overflow: "hidden", aspectRatio: "4/3" }}>
+                      <img src={url} alt={`Foto ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    </a>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>

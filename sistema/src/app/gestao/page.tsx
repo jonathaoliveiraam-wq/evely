@@ -78,9 +78,22 @@ export default function GestaoPage() {
 
   useEffect(() => { load(); }, []);
 
-  async function fazerCheckin(sessionId: string) {
+  // Realtime: atualiza dashboard automaticamente
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel("dashboard-sessions-rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "sessions" }, () => {
+        load();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function confirmarCheckin(sessionId: string) {
     setActionLoading(sessionId);
-    await fetch(`/api/sessoes/${sessionId}/checkin`, { method: "POST" });
+    await fetch(`/api/sessoes/${sessionId}/confirmar`, { method: "POST" });
     await load();
     setActionLoading(null);
   }
@@ -182,20 +195,32 @@ export default function GestaoPage() {
                       <div className="list-name">{name}</div>
                       <div className="list-meta">Sessão {session.session_number}/10 · {STATUS_LABEL[session.status] ?? session.status}</div>
                     </div>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                      {session.status === "checked_in" && (
-                        <span style={{ fontSize: 11, color: "var(--teal-700)", display: "flex", alignItems: "center", gap: 4 }}>
-                          <i className="ti ti-check" /> Check-in feito
-                        </span>
+                    <div>
+                      {session.status === "in_progress" ? (
+                        <button
+                          className="btn btn-sm btn-primary"
+                          onClick={() => openFinalizar(session)}
+                          disabled={isLoading}
+                          style={{ fontSize: 11, minWidth: 150 }}
+                        >
+                          <i className="ti ti-circle-check" /> Finalizar sessão
+                        </button>
+                      ) : (
+                        <button
+                          className="btn btn-sm"
+                          onClick={session.status === "checked_in" ? () => confirmarCheckin(session.id) : undefined}
+                          disabled={session.status !== "checked_in" || isLoading}
+                          style={{
+                            fontSize: 11, minWidth: 150,
+                            ...(session.status === "checked_in"
+                              ? { background: "var(--teal-600)", color: "#fff", border: "none" }
+                              : { color: "var(--gray-400)", borderColor: "var(--gray-200)", background: "transparent", border: "1px solid" })
+                          }}
+                        >
+                          <i className={`ti ${session.status === "checked_in" ? "ti-user-check" : "ti-clock"}`} />
+                          {" "}{isLoading ? "..." : "Confirmar check-in"}
+                        </button>
                       )}
-                      <button
-                        className="btn btn-sm btn-primary"
-                        onClick={() => openFinalizar(session)}
-                        disabled={isLoading}
-                        style={{ fontSize: 11, minWidth: 150 }}
-                      >
-                        <i className="ti ti-circle-check" /> Finalizar sessão
-                      </button>
                     </div>
                   </div>
                 );

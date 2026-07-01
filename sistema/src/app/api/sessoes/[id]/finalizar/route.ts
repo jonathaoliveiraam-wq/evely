@@ -12,6 +12,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     did_activities,
     location,
     requires_certificate,
+    photos,
   } = body;
 
   const supabase = await createAdminClient();
@@ -28,6 +29,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       did_activities,
       location,
       requires_certificate,
+      photos: photos ?? [],
     })
     .eq("id", id);
 

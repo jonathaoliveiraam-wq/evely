@@ -197,12 +197,14 @@ function StatusBadge({ status }: { status: string }) {
 function SessionCard({
   session,
   onFinalizar,
+  onConfirmar,
   onReagendar,
   onCancelar,
   actionLoading,
 }: {
   session: SessionWithPatient
   onFinalizar: (s: SessionWithPatient) => void
+  onConfirmar: (s: SessionWithPatient) => void
   onReagendar: (s: SessionWithPatient) => void
   onCancelar: (s: SessionWithPatient) => void
   actionLoading: string | null
@@ -248,13 +250,7 @@ function SessionCard({
       {/* Actions */}
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         {session.status !== "completed" && session.status !== "cancelled" && (
-          <>
-            {/* Check-in: só info visual, não bloqueia */}
-            {session.status === "checked_in" && (
-              <span style={{ fontSize: 11, color: "var(--teal-700)", display: "flex", alignItems: "center", gap: 4 }}>
-                <i className="ti ti-check" /> Check-in feito
-              </span>
-            )}
+          session.status === "in_progress" ? (
             <button
               className="btn btn-sm"
               onClick={() => onFinalizar(session)}
@@ -264,7 +260,22 @@ function SessionCard({
               <i className="ti ti-circle-check" style={{ marginRight: 4 }} />
               {isLoading ? "..." : "Finalizar sessão"}
             </button>
-          </>
+          ) : (
+            <button
+              className="btn btn-sm"
+              onClick={session.status === "checked_in" ? () => onConfirmar(session) : undefined}
+              disabled={session.status !== "checked_in" || isLoading}
+              style={{
+                fontSize: 12,
+                ...(session.status === "checked_in"
+                  ? { background: "var(--teal-600)", color: "#fff", border: "none" }
+                  : { color: "var(--gray-400)", background: "transparent", border: "1px solid var(--gray-200)" })
+              }}
+            >
+              <i className={`ti ${session.status === "checked_in" ? "ti-user-check" : "ti-clock"}`} style={{ marginRight: 4 }} />
+              {isLoading ? "..." : "Confirmar check-in"}
+            </button>
+          )
         )}
         {session.status === "completed" && (
           <span style={{ color: "var(--green-600)", fontSize: 13 }}>
@@ -333,6 +344,7 @@ export default function AgendaPage() {
     requires_certificate: false,
   })
   const [finalSaving, setFinalSaving] = useState(false)
+  const [finalPhotos, setFinalPhotos] = useState<(File | null)[]>([null, null, null, null])
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   // Reagendar / Cancelar
@@ -417,6 +429,18 @@ export default function AgendaPage() {
     loadActivePatients()
   }, [loadTodaySessions, loadActivePatients])
 
+  // Realtime: atualiza agenda automaticamente quando sessões mudam
+  useEffect(() => {
+    const channel = supabase
+      .channel("agenda-sessions-rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "sessions" }, () => {
+        loadTodaySessions()
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Tab switching
   useEffect(() => {
     if (tab === "semana" && !weekLoaded) {
@@ -450,6 +474,7 @@ export default function AgendaPage() {
 
   function openFinalizar(session: SessionWithPatient) {
     setFinalizing(session)
+    setFinalPhotos([null, null, null, null])
     setFinalForm({
       evolution_notes: session.evolution_notes ?? "",
       activities_notes: session.activities_notes ?? "",
@@ -465,12 +490,25 @@ export default function AgendaPage() {
     if (!finalizing) return
     setFinalSaving(true)
     try {
+      const photoUrls: string[] = []
+      for (const photo of finalPhotos.filter(Boolean) as File[]) {
+        const ext = photo.name.split(".").pop() ?? "jpg"
+        const fileName = `${finalizing.id}/${Date.now()}.${ext}`
+        const { data, error } = await supabase.storage
+          .from("session-photos")
+          .upload(fileName, photo, { upsert: true })
+        if (!error && data) {
+          const { data: urlData } = supabase.storage.from("session-photos").getPublicUrl(data.path)
+          photoUrls.push(urlData.publicUrl)
+        }
+      }
       await fetch(`/api/sessoes/${finalizing.id}/finalizar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(finalForm),
+        body: JSON.stringify({ ...finalForm, photos: photoUrls }),
       })
       setFinalizing(null)
+      setFinalPhotos([null, null, null, null])
       await loadTodaySessions()
     } finally {
       setFinalSaving(false)
@@ -686,6 +724,7 @@ export default function AgendaPage() {
                         <SessionCard
                           session={session}
                           onFinalizar={openFinalizar}
+                          onConfirmar={handleConfirmarInicio}
                           onReagendar={openReagendar}
                           onCancelar={handleCancelar}
                           actionLoading={actionLoading}
@@ -1115,11 +1154,11 @@ export default function AgendaPage() {
           <div
             className="modal"
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 600, width: "100%", maxHeight: "90vh", overflowY: "auto" }}
+            style={{ maxWidth: 600, width: "100%", maxHeight: "90vh", overflowY: "auto", color: "#1e293b" }}
           >
             <div className="modal-header">
               <div>
-                <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4, color: "#1e293b" }}>
                   Finalizar Sessão
                 </h2>
                 <p className="muted text-sm">
@@ -1314,12 +1353,84 @@ export default function AgendaPage() {
                     fontWeight: 500,
                     color: finalForm.requires_certificate
                       ? "var(--amber-700)"
-                      : "inherit",
+                      : "#1e293b",
                   }}
                 >
                   Requer atestado médico?
                 </span>
               </label>
+
+              {/* Fotos da sessão */}
+              <div className="form-group">
+                <label className="form-label" style={{ color: "#1e293b" }}>
+                  <i className="ti ti-camera" style={{ marginRight: 6 }} />
+                  Fotos da sessão
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 6 }}>
+                  {[0, 1, 2, 3].map((i) => {
+                    const file = finalPhotos[i]
+                    const preview = file ? URL.createObjectURL(file) : null
+                    return (
+                      <label
+                        key={i}
+                        style={{
+                          aspectRatio: "4/3",
+                          border: `2px dashed ${file ? "var(--teal-400)" : "var(--gray-300)"}`,
+                          borderRadius: 10,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          overflow: "hidden",
+                          background: file ? "transparent" : "var(--gray-50)",
+                          position: "relative",
+                        }}
+                      >
+                        {preview ? (
+                          <>
+                            <img src={preview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                const updated = [...finalPhotos]
+                                updated[i] = null
+                                setFinalPhotos(updated)
+                              }}
+                              style={{
+                                position: "absolute", top: 4, right: 4,
+                                background: "rgba(0,0,0,0.5)", color: "#fff",
+                                border: "none", borderRadius: "50%", width: 22, height: 22,
+                                cursor: "pointer", fontSize: 13, lineHeight: 1,
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                              }}
+                            >×</button>
+                          </>
+                        ) : (
+                          <div style={{ textAlign: "center", color: "var(--gray-400)" }}>
+                            <i className="ti ti-camera" style={{ fontSize: 22, display: "block", marginBottom: 4 }} />
+                            <span style={{ fontSize: 11 }}>Foto {i + 1}</span>
+                          </div>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={{ display: "none" }}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0]
+                            if (f) {
+                              const updated = [...finalPhotos]
+                              updated[i] = f
+                              setFinalPhotos(updated)
+                            }
+                            e.target.value = ""
+                          }}
+                        />
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
 
             <div className="modal-footer">
