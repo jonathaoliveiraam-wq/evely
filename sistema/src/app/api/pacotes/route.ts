@@ -38,7 +38,8 @@ export async function POST(req: Request) {
     return {
       package_id: pkg.id,
       session_number: sessionNumber,
-      scheduled_date: start_date,
+      // Sessões já feitas usam start_date; as pendentes ficam em 2099 até serem agendadas na agenda
+      scheduled_date: isCompleted ? start_date : "2099-12-31",
       scheduled_time: "08:00",
       status: isCompleted ? "completed" : "scheduled",
       completed_at: isCompleted ? now : null,
