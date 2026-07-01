@@ -247,26 +247,28 @@ function SessionCard({
 
       {/* Actions */}
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        {session.status !== "completed" && session.status !== "cancelled" && (() => {
-          const ready = session.status === "checked_in" || session.status === "in_progress";
-          return (
+        {session.status !== "completed" && session.status !== "cancelled" && (
+          session.status === "checked_in" || session.status === "in_progress" ? (
             <button
-              className={`btn btn-sm ${ready ? "" : "btn-outline"}`}
-              onClick={ready ? () => onFinalizar(session) : undefined}
-              disabled={!ready || isLoading}
-              style={{
-                fontSize: 12, minWidth: 148,
-                ...(ready
-                  ? { background: "var(--teal-600)", color: "#fff", border: "none" }
-                  : { color: "var(--gray-400)", borderColor: "var(--gray-200)" }
-                ),
-              }}
+              className="btn btn-sm"
+              onClick={() => onFinalizar(session)}
+              disabled={isLoading}
+              style={{ fontSize: 12, minWidth: 148, background: "var(--teal-600)", color: "#fff", border: "none" }}
             >
-              <i className={`ti ${ready ? "ti-circle-check" : "ti-clock"}`} style={{ marginRight: 4 }} />
-              {isLoading ? "..." : ready ? "Finalizar sessão" : "Aguardando check-in"}
+              <i className="ti ti-circle-check" style={{ marginRight: 4 }} />
+              {isLoading ? "..." : "Finalizar sessão"}
             </button>
-          );
-        })()}
+          ) : (
+            <button
+              className="btn btn-sm btn-outline"
+              disabled
+              style={{ fontSize: 12, minWidth: 148, color: "var(--gray-400)", borderColor: "var(--gray-200)" }}
+            >
+              <i className="ti ti-clock" style={{ marginRight: 4 }} />
+              Aguardando check-in
+            </button>
+          )
+        )}
         {session.status === "completed" && (
           <span style={{ color: "var(--green-600)", fontSize: 13 }}>
             <i className="ti ti-check" style={{ marginRight: 4 }} />
