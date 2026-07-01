@@ -49,6 +49,11 @@ interface FinalForm {
   requires_certificate: boolean
 }
 
+interface ActivePatient {
+  id: string
+  full_name: string
+}
+
 // --- Constants ---
 const TIME_SLOTS = [
   "07:00", "08:00", "09:00", "10:00", "11:00",
@@ -191,12 +196,10 @@ function StatusBadge({ status }: { status: string }) {
 // --- Session Card ---
 function SessionCard({
   session,
-  onConfirmarInicio,
   onFinalizar,
   actionLoading,
 }: {
   session: SessionWithPatient
-  onConfirmarInicio: (s: SessionWithPatient) => void
   onFinalizar: (s: SessionWithPatient) => void
   actionLoading: string | null
 }) {
@@ -240,21 +243,17 @@ function SessionCard({
 
       {/* Actions */}
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        {(session.status === "scheduled" || session.status === "checked_in") && (
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={() => onConfirmarInicio(session)}
-            disabled={isLoading}
-            style={{ fontSize: 12 }}
-          >
-            <i className="ti ti-player-play" style={{ marginRight: 4 }} />
-            {isLoading ? "..." : "Confirmar início"}
-          </button>
+        {session.status === "scheduled" && (
+          <span style={{ fontSize: 12, color: "var(--gray-400)" }}>
+            <i className="ti ti-clock" style={{ marginRight: 4 }} />
+            Aguardando check-in
+          </span>
         )}
-        {session.status === "in_progress" && (
+        {(session.status === "checked_in" || session.status === "in_progress") && (
           <button
             className="btn btn-sm"
             onClick={() => onFinalizar(session)}
+            disabled={isLoading}
             style={{
               background: "var(--teal-600)",
               color: "#fff",
@@ -263,7 +262,7 @@ function SessionCard({
             }}
           >
             <i className="ti ti-circle-check" style={{ marginRight: 4 }} />
-            Finalizar sessão
+            {isLoading ? "..." : "Finalizar sessão"}
           </button>
         )}
         {session.status === "completed" && (
@@ -312,6 +311,12 @@ export default function AgendaPage() {
   })
   const [finalSaving, setFinalSaving] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+
+  // Agendar sessão (clique em slot livre)
+  const [agendandoSlot, setAgendandoSlot] = useState<{ date: string; time: string } | null>(null)
+  const [activePatients, setActivePatients] = useState<ActivePatient[]>([])
+  const [selectedPatientId, setSelectedPatientId] = useState("")
+  const [agendandoLoading, setAgendandoLoading] = useState(false)
 
   // ---- Load functions ----
 
@@ -370,10 +375,20 @@ export default function AgendaPage() {
     }
   }, [])
 
+  const loadActivePatients = useCallback(async () => {
+    const { data } = await supabase
+      .from("patients")
+      .select("id, full_name")
+      .eq("status", "active")
+      .order("full_name")
+    setActivePatients((data as ActivePatient[]) ?? [])
+  }, [supabase])
+
   // Initial load
   useEffect(() => {
     loadTodaySessions()
-  }, [loadTodaySessions])
+    loadActivePatients()
+  }, [loadTodaySessions, loadActivePatients])
 
   // Tab switching
   useEffect(() => {
@@ -432,6 +447,29 @@ export default function AgendaPage() {
       await loadTodaySessions()
     } finally {
       setFinalSaving(false)
+    }
+  }
+
+  function openAgendar(date: string, time: string) {
+    setAgendandoSlot({ date, time })
+    setSelectedPatientId(activePatients[0]?.id ?? "")
+  }
+
+  async function handleAgendar() {
+    if (!agendandoSlot || !selectedPatientId) return
+    setAgendandoLoading(true)
+    try {
+      const res = await fetch("/api/sessoes/agendar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patient_id: selectedPatientId, date: agendandoSlot.date, time: agendandoSlot.time }),
+      })
+      const json = await res.json()
+      if (!res.ok) { alert(json.error ?? "Erro ao agendar."); return }
+      setAgendandoSlot(null)
+      await loadTodaySessions()
+    } finally {
+      setAgendandoLoading(false)
     }
   }
 
@@ -586,7 +624,6 @@ export default function AgendaPage() {
                       {session ? (
                         <SessionCard
                           session={session}
-                          onConfirmarInicio={handleConfirmarInicio}
                           onFinalizar={openFinalizar}
                           actionLoading={actionLoading}
                         />
@@ -608,7 +645,14 @@ export default function AgendaPage() {
                           )}
                         </div>
                       ) : (
-                        <div className="g-flex gap-8" style={{ alignItems: "center" }}>
+                        <button
+                          onClick={() => openAgendar(today, time)}
+                          style={{
+                            background: "transparent", border: "none", cursor: "pointer",
+                            display: "flex", alignItems: "center", gap: 8, padding: "4px 0",
+                            width: "100%",
+                          }}
+                        >
                           <span
                             className="badge"
                             style={{
@@ -617,9 +661,10 @@ export default function AgendaPage() {
                               border: "1px solid var(--green-600)",
                             }}
                           >
-                            Disponível
+                            <i className="ti ti-plus" style={{ fontSize: 11, marginRight: 4 }} />
+                            Disponível — clique para agendar
                           </span>
-                        </div>
+                        </button>
                       )}
                     </div>
                   </div>
@@ -892,6 +937,57 @@ export default function AgendaPage() {
                 )
               })
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ==================== MODAL: AGENDAR SESSÃO ==================== */}
+      {agendandoSlot && (
+        <div
+          className="modal-overlay active"
+          onClick={(e) => { if (e.target === e.currentTarget && !agendandoLoading) setAgendandoSlot(null) }}
+        >
+          <div className="modal" style={{ maxWidth: 400 }}>
+            <div className="modal-header">
+              <h3>
+                <i className="ti ti-calendar" style={{ marginRight: 8, color: "var(--teal-700)" }} />
+                Agendar sessão — {agendandoSlot.time}
+              </h3>
+              <button className="modal-close" onClick={() => setAgendandoSlot(null)} disabled={agendandoLoading}>&times;</button>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Paciente</label>
+              {activePatients.length === 0 ? (
+                <p className="muted text-sm">Nenhum paciente ativo com sessões disponíveis.</p>
+              ) : (
+                <select
+                  className="form-input"
+                  value={selectedPatientId}
+                  onChange={(e) => setSelectedPatientId(e.target.value)}
+                >
+                  {activePatients.map((p) => (
+                    <option key={p.id} value={p.id}>{p.full_name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div style={{ background: "var(--teal-50)", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "var(--teal-800)", marginBottom: 16 }}>
+              <i className="ti ti-info-circle" style={{ marginRight: 6 }} />
+              A próxima sessão disponível do paciente será agendada para <strong>{agendandoSlot.time}</strong> de hoje.
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setAgendandoSlot(null)} disabled={agendandoLoading}>Cancelar</button>
+              <button
+                className="btn btn-primary"
+                onClick={handleAgendar}
+                disabled={agendandoLoading || !selectedPatientId}
+              >
+                {agendandoLoading ? "Agendando…" : "Confirmar agendamento"}
+              </button>
+            </div>
           </div>
         </div>
       )}

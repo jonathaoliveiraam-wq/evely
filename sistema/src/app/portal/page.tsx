@@ -18,6 +18,8 @@ type Session = {
   scheduled_time: string;
   status: string;
   checked_in_at: string | null;
+  was_punctual: boolean | null;
+  did_activities: boolean | null;
 };
 
 type Patient = {
@@ -69,7 +71,7 @@ export default function PortalAtivoPage() {
         setPkg(activePkg);
         const { data: sesh } = await supabase
           .from("sessions")
-          .select("id, session_number, scheduled_date, scheduled_time, status, checked_in_at")
+          .select("id, session_number, scheduled_date, scheduled_time, status, checked_in_at, was_punctual, did_activities")
           .eq("package_id", activePkg.id)
           .order("session_number");
         setSessions(sesh ?? []);
@@ -83,6 +85,14 @@ export default function PortalAtivoPage() {
   const todaySession = sessions.find(s => s.scheduled_date === today && s.status !== "completed" && s.status !== "cancelled");
   const nextSession = sessions.find(s => s.status === "scheduled" && s.scheduled_date >= today);
 
+  // Gamificação: 20 pts presença + 10 pontualidade + 10 atividades = 40/sessão, 400 total
+  const totalPoints = sessions.reduce((acc, s) => {
+    if (s.status !== "completed") return acc;
+    return acc + 20 + (s.was_punctual ? 10 : 0) + (s.did_activities ? 10 : 0);
+  }, 0);
+  const maxPoints = 400;
+  const pointsPercent = Math.round((totalPoints / maxPoints) * 100);
+
   async function doCheckin() {
     if (!todaySession) return;
     setCheckinLoading(true);
@@ -93,10 +103,10 @@ export default function PortalAtivoPage() {
     if (pkg) {
       const { data: sesh } = await supabase
         .from("sessions")
-        .select("id, session_number, scheduled_date, scheduled_time, status, checked_in_at")
+        .select("id, session_number, scheduled_date, scheduled_time, status, checked_in_at, was_punctual, did_activities")
         .eq("package_id", pkg.id)
         .order("session_number");
-      setSessions(sesh ?? []);
+      setSessions((sesh as Session[]) ?? []);
     }
   }
 
@@ -137,6 +147,34 @@ export default function PortalAtivoPage() {
           Olá, {patient?.full_name?.split(" ")[0]}!
         </h2>
         <p style={{ color: "#64748b", fontSize: 14 }}>Acompanhe seu progresso aqui.</p>
+      </div>
+
+      {/* Gamificação */}
+      <div style={{ background: "linear-gradient(135deg, #0f766e 0%, #0d9488 100%)", borderRadius: 20, padding: "22px 24px", marginBottom: 20, color: "#fff" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+          <div>
+            <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 2, textTransform: "uppercase", letterSpacing: "0.06em" }}>Seus pontos</div>
+            <div style={{ fontSize: 38, fontWeight: 900, lineHeight: 1 }}>
+              {totalPoints}
+              <span style={{ fontSize: 16, fontWeight: 400, opacity: 0.7 }}> / {maxPoints}</span>
+            </div>
+          </div>
+          <div style={{ fontSize: 36 }}>
+            {totalPoints >= 400 ? "🏆" : totalPoints >= 200 ? "⭐" : totalPoints >= 80 ? "🌟" : "🎯"}
+          </div>
+        </div>
+
+        {/* Barra de pontos */}
+        <div style={{ height: 8, borderRadius: 99, background: "rgba(255,255,255,0.2)", marginBottom: 12, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${pointsPercent}%`, background: "#fff", borderRadius: 99, transition: "width 0.6s" }} />
+        </div>
+
+        {/* Breakdown */}
+        <div style={{ display: "flex", gap: 12, fontSize: 12, opacity: 0.85 }}>
+          <span>✅ Presença: 20 pts/sessão</span>
+          <span>⏰ Pontualidade: +10</span>
+          <span>🏠 Atividades: +10</span>
+        </div>
       </div>
 
       {/* Check-in card */}
