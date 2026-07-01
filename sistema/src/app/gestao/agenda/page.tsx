@@ -358,8 +358,7 @@ export default function AgendaPage() {
         .from("sessions")
         .select("*, packages(patient_id, patients(full_name))")
         .eq("scheduled_date", today)
-        .neq("status", "completed")
-        .neq("status", "cancelled")
+        .not("status", "in", "(completed,cancelled,no_show)")
         .order("scheduled_time")
       if (!error && data) {
         setTodaySessions(data as unknown as SessionWithPatient[])
