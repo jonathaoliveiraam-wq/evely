@@ -197,10 +197,14 @@ function StatusBadge({ status }: { status: string }) {
 function SessionCard({
   session,
   onFinalizar,
+  onReagendar,
+  onCancelar,
   actionLoading,
 }: {
   session: SessionWithPatient
   onFinalizar: (s: SessionWithPatient) => void
+  onReagendar: (s: SessionWithPatient) => void
+  onCancelar: (s: SessionWithPatient) => void
   actionLoading: string | null
 }) {
   const isLoading = actionLoading === session.id
@@ -271,6 +275,28 @@ function SessionCard({
             Concluída
           </span>
         )}
+
+        {/* Reagendar / Cancelar — disponível para sessões não finalizadas */}
+        {session.status !== "completed" && session.status !== "cancelled" && (
+          <div style={{ display: "flex", gap: 4, borderLeft: "1px solid var(--gray-200)", paddingLeft: 8, marginLeft: 4 }}>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => onReagendar(session)}
+              title="Reagendar"
+              style={{ fontSize: 11, padding: "4px 8px", color: "var(--teal-700)" }}
+            >
+              <i className="ti ti-calendar" style={{ marginRight: 3 }} /> Reagendar
+            </button>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => onCancelar(session)}
+              title="Cancelar"
+              style={{ fontSize: 11, padding: "4px 8px", color: "var(--red-600)" }}
+            >
+              <i className="ti ti-x" style={{ marginRight: 3 }} /> Cancelar
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -311,6 +337,11 @@ export default function AgendaPage() {
   })
   const [finalSaving, setFinalSaving] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+
+  // Reagendar / Cancelar
+  const [reagendando, setReagendando] = useState<SessionWithPatient | null>(null)
+  const [reagendandoForm, setReagendandoForm] = useState({ date: today, time: "08:00" })
+  const [reagendandoLoading, setReagendandoLoading] = useState(false)
 
   // Agendar sessão (clique em slot livre)
   const [agendandoSlot, setAgendandoSlot] = useState<{ date: string; time: string } | null>(null)
@@ -447,6 +478,40 @@ export default function AgendaPage() {
       await loadTodaySessions()
     } finally {
       setFinalSaving(false)
+    }
+  }
+
+  function openReagendar(session: SessionWithPatient) {
+    setReagendando(session)
+    setReagendandoForm({ date: session.scheduled_date ?? today, time: normalizeTime(session.scheduled_time) || "08:00" })
+  }
+
+  async function handleReagendar() {
+    if (!reagendando) return
+    setReagendandoLoading(true)
+    try {
+      const res = await fetch(`/api/sessoes/${reagendando.id}/reagendar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(reagendandoForm),
+      })
+      const json = await res.json()
+      if (!res.ok) { alert(json.error ?? "Erro ao reagendar."); return }
+      setReagendando(null)
+      await loadTodaySessions()
+    } finally {
+      setReagendandoLoading(false)
+    }
+  }
+
+  async function handleCancelar(session: SessionWithPatient) {
+    if (!confirm(`Cancelar sessão ${session.session_number}/10 de ${getPatientName(session)}?`)) return
+    setActionLoading(session.id)
+    try {
+      await fetch(`/api/sessoes/${session.id}/cancelar`, { method: "POST" })
+      await loadTodaySessions()
+    } finally {
+      setActionLoading(null)
     }
   }
 
@@ -625,6 +690,8 @@ export default function AgendaPage() {
                         <SessionCard
                           session={session}
                           onFinalizar={openFinalizar}
+                          onReagendar={openReagendar}
+                          onCancelar={handleCancelar}
                           actionLoading={actionLoading}
                         />
                       ) : blocked ? (
@@ -937,6 +1004,57 @@ export default function AgendaPage() {
                 )
               })
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ==================== MODAL: REAGENDAR SESSÃO ==================== */}
+      {reagendando && (
+        <div
+          className="modal-overlay active"
+          onClick={(e) => { if (e.target === e.currentTarget && !reagendandoLoading) setReagendando(null) }}
+        >
+          <div className="modal" style={{ maxWidth: 380 }}>
+            <div className="modal-header">
+              <h3>
+                <i className="ti ti-calendar" style={{ marginRight: 8, color: "var(--teal-700)" }} />
+                Reagendar sessão
+              </h3>
+              <button className="modal-close" onClick={() => setReagendando(null)} disabled={reagendandoLoading}>&times;</button>
+            </div>
+
+            <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 16 }}>
+              Sessão {reagendando.session_number}/10 · {getPatientName(reagendando)}
+            </div>
+
+            <div className="g-grid grid-2" style={{ gap: 12 }}>
+              <div className="form-group">
+                <label className="form-label">Nova data</label>
+                <input
+                  className="form-input"
+                  type="date"
+                  value={reagendandoForm.date}
+                  onChange={(e) => setReagendandoForm(f => ({ ...f, date: e.target.value }))}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Novo horário</label>
+                <select
+                  className="form-input"
+                  value={reagendandoForm.time}
+                  onChange={(e) => setReagendandoForm(f => ({ ...f, time: e.target.value }))}
+                >
+                  {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setReagendando(null)} disabled={reagendandoLoading}>Cancelar</button>
+              <button className="btn btn-primary" onClick={handleReagendar} disabled={reagendandoLoading}>
+                {reagendandoLoading ? "Salvando…" : "Confirmar reagendamento"}
+              </button>
+            </div>
           </div>
         </div>
       )}
