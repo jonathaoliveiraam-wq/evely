@@ -247,23 +247,12 @@ function SessionCard({
 
       {/* Actions */}
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        {session.status === "scheduled" && (
-          <span style={{ fontSize: 12, color: "var(--gray-400)" }}>
-            <i className="ti ti-clock" style={{ marginRight: 4 }} />
-            Aguardando check-in
-          </span>
-        )}
-        {(session.status === "checked_in" || session.status === "in_progress") && (
+        {session.status !== "completed" && session.status !== "cancelled" && (
           <button
             className="btn btn-sm"
             onClick={() => onFinalizar(session)}
             disabled={isLoading}
-            style={{
-              background: "var(--teal-600)",
-              color: "#fff",
-              border: "none",
-              fontSize: 12,
-            }}
+            style={{ background: "var(--teal-600)", color: "#fff", border: "none", fontSize: 12 }}
           >
             <i className="ti ti-circle-check" style={{ marginRight: 4 }} />
             {isLoading ? "..." : "Finalizar sessão"}
