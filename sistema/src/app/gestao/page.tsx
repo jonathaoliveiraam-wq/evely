@@ -182,23 +182,20 @@ export default function GestaoPage() {
                       <div className="list-name">{name}</div>
                       <div className="list-meta">Sessão {session.session_number}/10 · {STATUS_LABEL[session.status] ?? session.status}</div>
                     </div>
-                    <div>
-                      {(() => {
-                        const ready = session.status === "checked_in" || session.status === "in_progress";
-                        return (
-                          <button
-                            className={`btn btn-sm ${ready ? "btn-primary" : "btn-outline"}`}
-                            onClick={ready ? () => openFinalizar(session) : undefined}
-                            disabled={!ready || isLoading}
-                            style={{ fontSize: 11, minWidth: 150, ...(ready ? {} : { color: "var(--gray-400)", borderColor: "var(--gray-200)" }) }}
-                          >
-                            {ready
-                              ? <><i className="ti ti-circle-check" /> Finalizar sessão</>
-                              : <><i className="ti ti-clock" /> Aguardando check-in</>
-                            }
-                          </button>
-                        );
-                      })()}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                      {session.status === "checked_in" && (
+                        <span style={{ fontSize: 11, color: "var(--teal-700)", display: "flex", alignItems: "center", gap: 4 }}>
+                          <i className="ti ti-check" /> Check-in feito
+                        </span>
+                      )}
+                      <button
+                        className="btn btn-sm btn-primary"
+                        onClick={() => openFinalizar(session)}
+                        disabled={isLoading}
+                        style={{ fontSize: 11, minWidth: 150 }}
+                      >
+                        <i className="ti ti-circle-check" /> Finalizar sessão
+                      </button>
                     </div>
                   </div>
                 );

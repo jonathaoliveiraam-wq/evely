@@ -248,26 +248,23 @@ function SessionCard({
       {/* Actions */}
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         {session.status !== "completed" && session.status !== "cancelled" && (
-          session.status === "checked_in" || session.status === "in_progress" ? (
+          <>
+            {/* Check-in: só info visual, não bloqueia */}
+            {session.status === "checked_in" && (
+              <span style={{ fontSize: 11, color: "var(--teal-700)", display: "flex", alignItems: "center", gap: 4 }}>
+                <i className="ti ti-check" /> Check-in feito
+              </span>
+            )}
             <button
               className="btn btn-sm"
               onClick={() => onFinalizar(session)}
               disabled={isLoading}
-              style={{ fontSize: 12, minWidth: 148, background: "var(--teal-600)", color: "#fff", border: "none" }}
+              style={{ fontSize: 12, background: "var(--teal-600)", color: "#fff", border: "none" }}
             >
               <i className="ti ti-circle-check" style={{ marginRight: 4 }} />
               {isLoading ? "..." : "Finalizar sessão"}
             </button>
-          ) : (
-            <button
-              className="btn btn-sm btn-outline"
-              disabled
-              style={{ fontSize: 12, minWidth: 148, color: "var(--gray-400)", borderColor: "var(--gray-200)" }}
-            >
-              <i className="ti ti-clock" style={{ marginRight: 4 }} />
-              Aguardando check-in
-            </button>
-          )
+          </>
         )}
         {session.status === "completed" && (
           <span style={{ color: "var(--green-600)", fontSize: 13 }}>
@@ -1112,7 +1109,7 @@ export default function AgendaPage() {
       {/* ==================== FINALIZATION MODAL ==================== */}
       {finalizing && (
         <div
-          className="modal-overlay"
+          className="modal-overlay active"
           onClick={() => !finalSaving && setFinalizing(null)}
         >
           <div
