@@ -81,6 +81,11 @@ export async function proxy(request: NextRequest) {
     if (status === "awaiting_payment" && pathname !== "/portal/aguardando-pagamento") {
       return NextResponse.redirect(new URL("/portal/aguardando-pagamento", request.url));
     }
+
+    // Paciente ativo em página de espera → redireciona para o portal ativo
+    if (status === "active" && (pathname === "/portal/aguardando-pagamento" || pathname === "/portal/aguardando-avaliacao")) {
+      return NextResponse.redirect(new URL("/portal", request.url));
+    }
   }
 
   return response;

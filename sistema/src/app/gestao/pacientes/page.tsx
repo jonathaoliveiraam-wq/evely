@@ -379,7 +379,7 @@ export default function PacientesPage() {
                           <button
                             className="btn btn-primary btn-sm"
                             style={{ fontSize: 11, padding: "4px 10px" }}
-                            onClick={(e) => { e.stopPropagation(); setActivating(p); setPkgForm({ price: "", payment: "paid", startDate: new Date().toISOString().split("T")[0], completedSessions: 0 }); }}
+                            onClick={(e) => { e.stopPropagation(); setActivating(p); setPkgForm({ price: "1700", payment: "paid", startDate: new Date().toISOString().split("T")[0], completedSessions: 0 }); }}
                           >
                             <i className="ti ti-player-play" /> Ativar
                           </button>
