@@ -121,6 +121,19 @@ function normalizeTime(t: string): string {
   return t ? t.substring(0, 5) : ""
 }
 
+function getMonthCalendar(year: number, month: number): (string | null)[][] {
+  const firstDow = new Date(year, month, 1).getDay()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const cells: (string | null)[] = Array(firstDow).fill(null)
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push(`${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`)
+  }
+  while (cells.length % 7 !== 0) cells.push(null)
+  const weeks: (string | null)[][] = []
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
+  return weeks
+}
+
 function getPatientName(session: SessionWithPatient): string {
   return session.packages?.patients?.full_name ?? "Paciente"
 }
@@ -324,7 +337,12 @@ export default function AgendaPage() {
   const supabase = createClient()
   const today = getToday()
 
-  const [tab, setTab] = useState<"hoje" | "semana" | "bloqueios">("hoje")
+  const [tab, setTab] = useState<"hoje" | "semana" | "mes" | "bloqueios">("hoje")
+
+  // Mês
+  const [monthYear, setMonthYear] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() })
+  const [monthSessions, setMonthSessions] = useState<SessionWithPatient[]>([])
+  const [monthLoading, setMonthLoading] = useState(false)
 
   // Hoje
   const [todaySessions, setTodaySessions] = useState<SessionWithPatient[]>([])
@@ -438,6 +456,25 @@ export default function AgendaPage() {
     }
   }, [])
 
+  const loadMonthSessions = useCallback(async (year: number, month: number) => {
+    setMonthLoading(true)
+    try {
+      const mm = String(month + 1).padStart(2, "0")
+      const firstDay = `${year}-${mm}-01`
+      const lastDay = `${year}-${mm}-${String(new Date(year, month + 1, 0).getDate()).padStart(2, "0")}`
+      const { data } = await supabase
+        .from("sessions")
+        .select("*, packages(patient_id, patients(full_name))")
+        .gte("scheduled_date", firstDay)
+        .lte("scheduled_date", lastDay)
+        .not("status", "in", "(cancelled,no_show)")
+        .order("scheduled_time")
+      setMonthSessions((data as unknown as SessionWithPatient[]) ?? [])
+    } finally {
+      setMonthLoading(false)
+    }
+  }, [supabase])
+
   const loadActivePatients = useCallback(async () => {
     const { data } = await supabase
       .from("patients")
@@ -492,14 +529,17 @@ export default function AgendaPage() {
 
   // Tab switching
   useEffect(() => {
-    if (tab === "semana" && !weekLoaded) {
-      loadWeekSessions()
-    }
-    if (tab === "bloqueios") {
-      loadBlockedSlots(blockDate)
-    }
+    if (tab === "semana" && !weekLoaded) loadWeekSessions()
+    if (tab === "mes") loadMonthSessions(monthYear.year, monthYear.month)
+    if (tab === "bloqueios") loadBlockedSlots(blockDate)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab])
+
+  // Reload mes when month/year changes
+  useEffect(() => {
+    if (tab === "mes") loadMonthSessions(monthYear.year, monthYear.month)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthYear])
 
   // Bloqueios date change
   useEffect(() => {
@@ -724,6 +764,13 @@ export default function AgendaPage() {
         >
           <i className="ti ti-calendar" style={{ marginRight: 6 }} />
           Semana
+        </button>
+        <button
+          className={`tab-btn${tab === "mes" ? " active" : ""}`}
+          onClick={() => setTab("mes")}
+        >
+          <i className="ti ti-calendar-month" style={{ marginRight: 6 }} />
+          Mês
         </button>
         <button
           className={`tab-btn${tab === "bloqueios" ? " active" : ""}`}
@@ -1026,6 +1073,106 @@ export default function AgendaPage() {
           )}
         </div>
       )}
+
+      {/* ==================== TAB: MÊS ==================== */}
+      {tab === "mes" && (() => {
+        const { year, month } = monthYear
+        const monthCal = getMonthCalendar(year, month)
+        const monthName = new Date(year, month, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
+        const STATUS_DOT: Record<string, string> = {
+          scheduled: "#14b8a6", checked_in: "#f59e0b", in_progress: "#0f766e", completed: "#16a34a",
+        }
+
+        return (
+          <div>
+            {/* Nav header */}
+            <div className="g-flex" style={{ alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setMonthYear(my => {
+                const d = new Date(my.year, my.month - 1, 1)
+                return { year: d.getFullYear(), month: d.getMonth() }
+              })}>
+                <i className="ti ti-chevron-left" />
+              </button>
+              <span style={{ fontWeight: 700, fontSize: 16, textTransform: "capitalize" }}>{monthName}</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => setMonthYear(my => {
+                const d = new Date(my.year, my.month + 1, 1)
+                return { year: d.getFullYear(), month: d.getMonth() }
+              })}>
+                <i className="ti ti-chevron-right" />
+              </button>
+            </div>
+
+            {monthLoading ? (
+              <div className="card" style={{ padding: 40, textAlign: "center", color: "var(--gray-400)" }}>Carregando...</div>
+            ) : (
+              <div className="card card-flush" style={{ overflow: "hidden", padding: "0 0 4px" }}>
+                {/* Day names header */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: "1px solid var(--gray-100)" }}>
+                  {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map(d => (
+                    <div key={d} style={{ textAlign: "center", padding: "10px 0", fontSize: 11, fontWeight: 700, color: "var(--gray-400)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      {d}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Weeks */}
+                {monthCal.map((week, wi) => (
+                  <div key={wi} style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: wi < monthCal.length - 1 ? "1px solid var(--gray-50)" : "none" }}>
+                    {week.map((date, di) => {
+                      if (!date) return <div key={di} style={{ minHeight: 80, borderRight: di < 6 ? "1px solid var(--gray-50)" : "none" }} />
+                      const daySessions = monthSessions.filter(s => s.scheduled_date === date)
+                      const isToday = date === today
+                      const dow = new Date(date + "T12:00:00").getDay()
+                      const dayRec = recurringSchedules.filter(
+                        r => r.day_of_week === dow && !daySessions.some(s => normalizeTime(s.scheduled_time) === normalizeTime(r.scheduled_time))
+                      )
+                      return (
+                        <div key={date} onClick={() => openWeekDayDetail(date)}
+                          style={{
+                            minHeight: 80, padding: "6px 8px", cursor: "pointer",
+                            borderRight: di < 6 ? "1px solid var(--gray-50)" : "none",
+                            background: isToday ? "var(--teal-50)" : "#fff",
+                            transition: "background 0.15s",
+                          }}
+                          onMouseEnter={e => { if (!isToday) (e.currentTarget as HTMLDivElement).style.background = "var(--gray-50)" }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = isToday ? "var(--teal-50)" : "#fff" }}
+                        >
+                          <div style={{ fontSize: 13, fontWeight: isToday ? 800 : 500, color: isToday ? "var(--teal-700)" : "var(--gray-600)", marginBottom: 4 }}>
+                            {parseInt(date.split("-")[2])}
+                          </div>
+                          {daySessions.slice(0, 3).map(s => (
+                            <div key={s.id} style={{
+                              fontSize: 10, borderRadius: 4, padding: "2px 5px", marginBottom: 2,
+                              background: "var(--teal-50)", color: "var(--teal-800)",
+                              borderLeft: `3px solid ${STATUS_DOT[s.status] ?? "var(--gray-300)"}`,
+                              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                            }}>
+                              {normalizeTime(s.scheduled_time)} {getPatientName(s)}
+                            </div>
+                          ))}
+                          {daySessions.length > 3 && (
+                            <div style={{ fontSize: 10, color: "var(--gray-400)" }}>+{daySessions.length - 3} mais</div>
+                          )}
+                          {dayRec.slice(0, 2).map(r => (
+                            <div key={r.id} style={{
+                              fontSize: 10, borderRadius: 4, padding: "2px 5px", marginBottom: 2,
+                              background: "#eff6ff", color: "#1d4ed8",
+                              borderLeft: "3px solid #60a5fa", opacity: 0.8,
+                              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                            }}>
+                              🔁 {normalizeTime(r.scheduled_time)} {r.patients?.full_name ?? "—"}
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* ==================== TAB: BLOQUEIOS ==================== */}
       {tab === "bloqueios" && (

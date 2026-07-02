@@ -11,7 +11,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const { error } = await supabase
     .from("sessions")
-    .update({ scheduled_date: date, scheduled_time: time, status: "rescheduled" })
+    .update({ scheduled_date: date, scheduled_time: time, status: "scheduled" })
     .eq("id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
