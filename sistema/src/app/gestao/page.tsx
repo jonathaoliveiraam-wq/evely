@@ -65,7 +65,7 @@ export default function GestaoPage() {
       supabase.from("sessions")
         .select("id, session_number, scheduled_time, status, checked_in_at, packages(patients(full_name))")
         .eq("scheduled_date", today)
-        .not("status", "in", "(completed,cancelled,no_show,rescheduled)")
+        .not("status", "in", "(cancelled,no_show,rescheduled)")
         .order("scheduled_time"),
     ]);
 
@@ -123,7 +123,7 @@ export default function GestaoPage() {
     name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 
   const STATUS_LABEL: Record<string, string> = {
-    scheduled: "Agendada", checked_in: "Check-in feito", in_progress: "Em andamento",
+    scheduled: "Agendada", checked_in: "Check-in feito", in_progress: "Em andamento", completed: "Concluída",
   };
 
   return (
@@ -196,7 +196,11 @@ export default function GestaoPage() {
                       <div className="list-meta">Sessão {session.session_number}/10 · {STATUS_LABEL[session.status] ?? session.status}</div>
                     </div>
                     <div>
-                      {session.status === "in_progress" ? (
+                      {session.status === "completed" ? (
+                        <span style={{ fontSize: 12, color: "var(--green-600)", display: "flex", alignItems: "center", gap: 4 }}>
+                          <i className="ti ti-circle-check" /> Concluída
+                        </span>
+                      ) : session.status === "in_progress" ? (
                         <button
                           className="btn btn-sm btn-primary"
                           onClick={() => openFinalizar(session)}
