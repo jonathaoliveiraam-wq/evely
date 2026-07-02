@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type Package = {
@@ -27,7 +27,7 @@ type Session = {
   photos: string[] | null;
 };
 
-type Patient = { id: string; full_name: string; status: string };
+type Patient = { id: string; full_name: string; status: string; avatar_url: string | null };
 
 const fmt = (cents: number) =>
   (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -59,6 +59,9 @@ export default function PortalAtivoPage() {
   const [checkinLoading, setCheckinLoading] = useState(false);
   const [checkinDone, setCheckinDone]   = useState(false);
   const [histDetail, setHistDetail]     = useState<Session | null>(null);
+  const [avatarUrl, setAvatarUrl]       = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const today = new Date().toISOString().split("T")[0];
 
@@ -79,10 +82,11 @@ export default function PortalAtivoPage() {
       if (!user) return;
 
       const { data: pat } = await supabase
-        .from("patients").select("id, full_name, status")
+        .from("patients").select("id, full_name, status, avatar_url")
         .eq("auth_user_id", user.id).single();
       if (!pat) { setLoading(false); return; }
       setPatient(pat);
+      setAvatarUrl((pat as Patient).avatar_url ?? null);
 
       const { data: activePkg } = await supabase
         .from("packages").select("id, start_date, end_date, price_cents, payment_status")
@@ -126,6 +130,21 @@ export default function PortalAtivoPage() {
 
   const trophy = totalPoints >= 400 ? "🏆" : totalPoints >= 280 ? "🥇" : totalPoints >= 160 ? "🥈" : totalPoints >= 80 ? "🥉" : "🎯";
 
+  async function handleAvatarUpload(file: File) {
+    if (file.size > 5 * 1024 * 1024) {
+      alert("A foto deve ter no máximo 5 MB.");
+      return;
+    }
+    setAvatarUploading(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/pacientes/avatar", { method: "POST", body: fd });
+    const json = await res.json();
+    if (json.url) setAvatarUrl(json.url);
+    else alert(json.error ?? "Erro ao enviar foto.");
+    setAvatarUploading(false);
+  }
+
   async function doCheckin() {
     if (!todaySession) return;
     setCheckinLoading(true);
@@ -167,7 +186,71 @@ export default function PortalAtivoPage() {
 
       {/* Header */}
       <div style={{ textAlign: "center", marginBottom: 28 }}>
-        <div style={{ fontSize: 40, marginBottom: 6 }}>🦶</div>
+        {/* Avatar */}
+        <div style={{ position: "relative", display: "inline-block", marginBottom: 12 }}>
+          <div
+            onClick={() => !avatarUploading && fileRef.current?.click()}
+            title="Clique para alterar sua foto"
+            style={{
+              width: 84, height: 84, borderRadius: "50%",
+              background: avatarUrl ? "transparent" : "linear-gradient(135deg, #ccfbf1, #0d9488)",
+              border: "3px solid #ccfbf1",
+              overflow: "hidden", position: "relative",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer",
+              boxShadow: "0 2px 12px rgba(15,118,110,0.18)",
+            }}
+          >
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt="Foto de perfil"
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              />
+            ) : (
+              <span style={{ fontSize: 34, color: "#fff", fontWeight: 700, lineHeight: 1 }}>
+                {patient?.full_name?.charAt(0)?.toUpperCase() ?? "?"}
+              </span>
+            )}
+            {avatarUploading && (
+              <div style={{
+                position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                borderRadius: "50%",
+              }}>
+                <span style={{ fontSize: 20 }}>⏳</span>
+              </div>
+            )}
+          </div>
+          {/* Botão câmera */}
+          <button
+            onClick={() => !avatarUploading && fileRef.current?.click()}
+            disabled={avatarUploading}
+            title="Alterar foto"
+            style={{
+              position: "absolute", bottom: 2, right: 2,
+              width: 26, height: 26, borderRadius: "50%",
+              background: "#0f766e", border: "2px solid #fff",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer", fontSize: 13, lineHeight: 1,
+              padding: 0, color: "#fff",
+            }}
+          >
+            📷
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleAvatarUpload(f);
+              e.target.value = "";
+            }}
+          />
+        </div>
+
         <h2 style={{ fontFamily: "var(--font-display, serif)", color: "#0f766e", fontSize: 21, margin: "0 0 4px" }}>
           Olá, {patient?.full_name?.split(" ")[0]}!
         </h2>
