@@ -21,7 +21,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/gestao/pacientes", label: "Pacientes", icon: "ti-users" },
       { href: "/gestao/financeiro", label: "Financeiro", icon: "ti-receipt" },
-      { href: "/gestao/cs", label: "CS", icon: "ti-heart-handshake" },
+      { href: "/gestao/cs", label: "Relacionamento", icon: "ti-heart-handshake" },
     ],
   },
 ];

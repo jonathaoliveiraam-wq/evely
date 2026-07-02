@@ -11,7 +11,7 @@ const TITLES: Record<string, [string, string]> = {
   "/gestao/cs":         ["CS — Relacionamento", "Contratos vencidos, aniversariantes e suspensões"],
 };
 
-const EMPTY = { full_name: "", phone: "", guardian_name: "", diagnosis: "", notes: "", portal_username: "", password: "" };
+const EMPTY = { full_name: "", phone: "", guardian_name: "", birth_date: "", diagnosis: "", notes: "", portal_username: "", password: "" };
 
 export default function Topbar() {
   const pathname = usePathname();
@@ -102,9 +102,15 @@ export default function Topbar() {
             <label className="form-label">Telefone *</label>
             <input className="form-input" type="text" placeholder="(92) 99999-0000" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
           </div>
-          <div className="form-group">
-            <label className="form-label">Responsável (se houver)</label>
-            <input className="form-input" type="text" placeholder="Nome do responsável" value={form.guardian_name} onChange={(e) => set("guardian_name", e.target.value)} />
+          <div className="g-grid grid-2" style={{ gap: 12 }}>
+            <div className="form-group">
+              <label className="form-label">Aniversário</label>
+              <input className="form-input" type="date" value={form.birth_date} onChange={(e) => set("birth_date", e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Responsável (se houver)</label>
+              <input className="form-input" type="text" placeholder="Nome do responsável" value={form.guardian_name} onChange={(e) => set("guardian_name", e.target.value)} />
+            </div>
           </div>
           <div className="form-group">
             <label className="form-label">Diagnóstico</label>

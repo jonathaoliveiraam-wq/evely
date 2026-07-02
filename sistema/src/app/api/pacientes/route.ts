@@ -2,7 +2,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
-  const { full_name, phone, guardian_name, diagnosis, notes, portal_username, password } =
+  const { full_name, phone, guardian_name, birth_date, diagnosis, notes, portal_username, password } =
     await req.json();
 
   if (!full_name || !phone || !portal_username || !password) {
@@ -30,6 +30,7 @@ export async function POST(req: Request) {
       full_name,
       phone,
       guardian_name: guardian_name || null,
+      birth_date: birth_date || null,
       diagnosis: diagnosis || null,
       notes: notes || null,
       portal_username: portal_username.toLowerCase().trim(),

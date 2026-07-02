@@ -329,7 +329,7 @@ export default function PacientesPage() {
       <div className="tabs">
         <button className={`tab-btn${tab === "lista" ? " active" : ""}`} onClick={() => setTab("lista")}>Pacientes</button>
         <button className={`tab-btn${tab === "financeiro" ? " active" : ""}`} onClick={() => setTab("financeiro")}>Financeiro</button>
-        <button className={`tab-btn${tab === "cs" ? " active" : ""}`} onClick={() => setTab("cs")}>CS</button>
+        <button className={`tab-btn${tab === "cs" ? " active" : ""}`} onClick={() => setTab("cs")}>Relacionamento</button>
       </div>
 
       {tab === "lista" && (
@@ -463,7 +463,13 @@ export default function PacientesPage() {
             {modalTab === "resumo" && (
               <table style={{ fontSize: 13, width: "100%" }}>
                 <tbody>
-                  {[["Telefone", selected.phone], ["Responsável", selected.guardian_name ?? "—"], ["Usuário do portal", selected.portal_username], ["Diagnóstico", selected.diagnosis ?? "—"]].map(([label, val]) => (
+                  {[
+                    ["Telefone", selected.phone],
+                    ["Aniversário", selected.birth_date ? new Date(selected.birth_date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "long" }) : "—"],
+                    ["Responsável", selected.guardian_name ?? "—"],
+                    ["Usuário do portal", selected.portal_username],
+                    ["Diagnóstico", selected.diagnosis ?? "—"],
+                  ].map(([label, val]) => (
                     <tr key={label}><td className="muted" style={{ padding: "6px 0", border: "none" }}>{label}</td><td style={{ padding: "6px 0", border: "none", textAlign: "right" }}>{val}</td></tr>
                   ))}
                 </tbody>
