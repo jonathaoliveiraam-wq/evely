@@ -387,3 +387,21 @@
   display: flex; align-items: center; justify-content: center;
   background: var(--teal-50); color: var(--teal-700); font-size: 22px;
 }
+
+/* ---------- Footer ---------- */
+.g-footer {
+  font-size: 11px; color: var(--gray-400); text-align: center;
+  padding: 14px 24px; border-top: 1px solid var(--gray-100); margin-top: auto;
+}
+
+/* ---------- Week card hover ---------- */
+.week-day-card {
+  border-radius: 14px; padding: 12px 10px; border: 1px solid var(--gray-100);
+  background: var(--white); cursor: pointer;
+  transition: box-shadow 0.18s, border-color 0.18s, transform 0.15s;
+}
+.week-day-card:hover {
+  border-color: var(--teal-400); box-shadow: 0 4px 16px rgba(15,118,110,0.12);
+  transform: translateY(-2px);
+}
+.week-day-card.today { border: 2px solid var(--teal-600); }

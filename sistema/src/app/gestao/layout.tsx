@@ -9,6 +9,9 @@ export default function GestaoLayout({ children }: { children: React.ReactNode }
       <div className="g-main">
         <Topbar />
         <div className="g-content">{children}</div>
+        <footer className="g-footer">
+          © {new Date().getFullYear()} Todos os direitos reservados — Dra. Evely Sarmento &nbsp;·&nbsp; powered by <strong>Alavanca Aceleradora</strong>
+        </footer>
       </div>
     </div>
   );

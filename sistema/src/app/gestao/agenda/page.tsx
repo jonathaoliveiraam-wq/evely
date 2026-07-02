@@ -37,6 +37,7 @@ interface BlockedSlot {
   id: string
   slot_time: string
   reason: string
+  recurring_group_id?: string | null
 }
 
 interface FinalForm {
@@ -329,8 +330,22 @@ export default function AgendaPage() {
   // Bloqueios
   const [blockDate, setBlockDate] = useState(today)
   const [blockedSlots, setBlockedSlots] = useState<BlockedSlot[]>([])
+  const [todayBlockedSlots, setTodayBlockedSlots] = useState<BlockedSlot[]>([])
   const [blockLoading, setBlockLoading] = useState(false)
   const [blockingSlot, setBlockingSlot] = useState<string | null>(null)
+  const [blockModal, setBlockModal] = useState<string | null>(null)
+  const [blockReason, setBlockReason] = useState("")
+  const [blockRecurring, setBlockRecurring] = useState(false)
+
+  // Semana — detalhe do dia
+  const [weekDayDetail, setWeekDayDetail] = useState<string | null>(null)
+  const [weekDayBlocked, setWeekDayBlocked] = useState<BlockedSlot[]>([])
+  const [weekDaySessions, setWeekDaySessions] = useState<SessionWithPatient[]>([])
+
+  // Agendamento recorrente
+  const [scheduleRecurring, setScheduleRecurring] = useState(false)
+  const [recurringDays, setRecurringDays] = useState<number[]>([])
+  const [recurringTime, setRecurringTime] = useState("08:00")
 
   // Finalization modal
   const [finalizing, setFinalizing] = useState<SessionWithPatient | null>(null)
@@ -427,7 +442,25 @@ export default function AgendaPage() {
   useEffect(() => {
     loadTodaySessions()
     loadActivePatients()
+    fetch(`/api/agenda/bloqueios?date=${today}`)
+      .then(r => r.json())
+      .then(j => setTodayBlockedSlots(j.slots ?? []))
+      .catch(() => {})
   }, [loadTodaySessions, loadActivePatients])
+
+  async function openWeekDayDetail(date: string) {
+    setWeekDayDetail(date)
+    const [sessRes, blkRes] = await Promise.all([
+      supabase.from("sessions")
+        .select("*, packages(patient_id, patients(full_name))")
+        .eq("scheduled_date", date)
+        .not("status", "in", "(cancelled,no_show,rescheduled)")
+        .order("scheduled_time"),
+      fetch(`/api/agenda/bloqueios?date=${date}`).then(r => r.json()),
+    ])
+    setWeekDaySessions((sessRes.data as unknown as SessionWithPatient[]) ?? [])
+    setWeekDayBlocked(blkRes.slots ?? [])
+  }
 
   // Realtime: atualiza agenda automaticamente quando sessões mudam
   useEffect(() => {
@@ -552,6 +585,9 @@ export default function AgendaPage() {
   function openAgendar(date: string, time: string) {
     setAgendandoSlot({ date, time })
     setSelectedPatientId(activePatients[0]?.id ?? "")
+    setScheduleRecurring(false)
+    setRecurringDays([])
+    setRecurringTime(time)
   }
 
   async function handleAgendar() {
@@ -565,6 +601,16 @@ export default function AgendaPage() {
       })
       const json = await res.json()
       if (!res.ok) { alert(json.error ?? "Erro ao agendar."); return }
+
+      // Salvar agenda recorrente se marcado
+      if (scheduleRecurring && recurringDays.length > 0) {
+        await fetch("/api/agenda/recorrente", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ patient_id: selectedPatientId, days: recurringDays, time: recurringTime }),
+        }).catch(() => {})
+      }
+
       setAgendandoSlot(null)
       await loadTodaySessions()
     } finally {
@@ -572,21 +618,42 @@ export default function AgendaPage() {
     }
   }
 
-  async function handleBloquear(time: string) {
-    setBlockingSlot(time)
+  function handleBloquear(time: string) {
+    setBlockModal(time)
+    setBlockReason("")
+    setBlockRecurring(false)
+  }
+
+  async function confirmBloquear() {
+    if (!blockModal) return
+    setBlockingSlot(blockModal)
     try {
       await fetch("/api/agenda/bloqueios", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: blockDate, time, reason: "" }),
+        body: JSON.stringify({ date: blockDate, time: blockModal, reason: blockReason, recurring: blockRecurring }),
       })
       await loadBlockedSlots(blockDate)
+      setBlockModal(null)
     } finally {
       setBlockingSlot(null)
     }
   }
 
-  async function handleDesbloquear(id: string) {
+  async function handleDesbloquear(id: string, groupId?: string | null) {
+    if (groupId) {
+      const all = window.confirm(
+        "Este horário faz parte de uma série recorrente.\n\n✅ OK → Desbloquear TODOS os futuros\n❌ Cancelar → Desbloquear só este"
+      )
+      setBlockingSlot(id)
+      try {
+        await fetch(all ? `/api/agenda/bloqueios?group_id=${groupId}` : `/api/agenda/bloqueios?id=${id}`, { method: "DELETE" })
+        await loadBlockedSlots(blockDate)
+      } finally {
+        setBlockingSlot(null)
+      }
+      return
+    }
     setBlockingSlot(id)
     try {
       await fetch(`/api/agenda/bloqueios?id=${id}`, { method: "DELETE" })
@@ -729,6 +796,16 @@ export default function AgendaPage() {
                           onCancelar={handleCancelar}
                           actionLoading={actionLoading}
                         />
+                      ) : todayBlockedSlots.find(b => normalizeTime(b.slot_time) === time) ? (
+                        <div className="g-flex gap-8" style={{ alignItems: "center" }}>
+                          <span className="badge" style={{ background: "var(--gray-50)", color: "var(--gray-500)", border: "1px solid var(--gray-300)" }}>
+                            <i className="ti ti-lock" style={{ marginRight: 4, fontSize: 11 }} />
+                            Bloqueado
+                          </span>
+                          {todayBlockedSlots.find(b => normalizeTime(b.slot_time) === time)?.reason && (
+                            <span className="muted text-sm">{todayBlockedSlots.find(b => normalizeTime(b.slot_time) === time)?.reason}</span>
+                          )}
+                        </div>
                       ) : blocked ? (
                         <div className="g-flex gap-8" style={{ alignItems: "center" }}>
                           <span
@@ -820,13 +897,9 @@ export default function AgendaPage() {
                 return (
                   <div
                     key={date}
-                    className="card"
-                    style={{
-                      padding: "12px 10px",
-                      border: isToday
-                        ? "2px solid var(--teal-600)"
-                        : "1px solid var(--gray-50)",
-                    }}
+                    className={`week-day-card${isToday ? " today" : ""}`}
+                    onClick={() => openWeekDayDetail(date)}
+                    title="Clique para ver detalhes do dia"
                   >
                     {/* Day header */}
                     <div style={{ marginBottom: 10, textAlign: "center" }}>
@@ -1016,12 +1089,12 @@ export default function AgendaPage() {
                       {blocked ? (
                         <button
                           className="btn btn-ghost btn-sm"
-                          onClick={() => handleDesbloquear(blocked.id)}
+                          onClick={() => handleDesbloquear(blocked.id, blocked.recurring_group_id)}
                           disabled={isActionLoading}
                           style={{ color: "var(--green-600)" }}
                         >
                           <i className="ti ti-lock-open" style={{ marginRight: 4 }} />
-                          {isActionLoading ? "..." : "Desbloquear"}
+                          {isActionLoading ? "..." : blocked.recurring_group_id ? "Desbloquear (série)" : "Desbloquear"}
                         </button>
                       ) : (
                         <button
@@ -1128,8 +1201,51 @@ export default function AgendaPage() {
 
             <div style={{ background: "var(--teal-50)", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "var(--teal-800)", marginBottom: 16 }}>
               <i className="ti ti-info-circle" style={{ marginRight: 6 }} />
-              A próxima sessão disponível do paciente será agendada para <strong>{agendandoSlot.time}</strong> de hoje.
+              A próxima sessão disponível do paciente será agendada para <strong>{agendandoSlot.time}</strong>.
             </div>
+
+            {/* Recorrência */}
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
+              padding: "10px 14px", borderRadius: 8, marginBottom: 12,
+              background: scheduleRecurring ? "var(--teal-50)" : "var(--gray-50)",
+              border: `1px solid ${scheduleRecurring ? "var(--teal-300)" : "var(--gray-200)"}` }}>
+              <input type="checkbox" checked={scheduleRecurring}
+                onChange={e => setScheduleRecurring(e.target.checked)}
+                style={{ width: 16, height: 16, accentColor: "var(--teal-600)" }} />
+              <span style={{ fontSize: 13, fontWeight: 500 }}>
+                <i className="ti ti-repeat" style={{ marginRight: 6 }} />
+                Cliente recorrente — alocar horário fixo na agenda
+              </span>
+            </label>
+
+            {scheduleRecurring && (
+              <div style={{ padding: "12px 14px", background: "var(--gray-50)", borderRadius: 8, marginBottom: 12 }}>
+                <div className="form-label" style={{ marginBottom: 8 }}>Dias da semana</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+                  {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((d, i) => {
+                    const sel = recurringDays.includes(i)
+                    return (
+                      <button key={i} type="button"
+                        onClick={() => setRecurringDays(sel ? recurringDays.filter(x => x !== i) : [...recurringDays, i])}
+                        style={{ width: 40, height: 40, borderRadius: "50%", fontWeight: 700, fontSize: 12,
+                          background: sel ? "var(--teal-600)" : "transparent",
+                          color: sel ? "#fff" : "var(--gray-500)",
+                          border: `2px solid ${sel ? "var(--teal-600)" : "var(--gray-300)"}`,
+                          cursor: "pointer" }}>
+                        {d}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Horário recorrente</label>
+                  <select className="form-input" value={recurringTime}
+                    onChange={e => setRecurringTime(e.target.value)}>
+                    {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+              </div>
+            )}
 
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={() => setAgendandoSlot(null)} disabled={agendandoLoading}>Cancelar</button>
@@ -1455,6 +1571,87 @@ export default function AgendaPage() {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL: BLOQUEAR HORÁRIO ===== */}
+      {blockModal && (
+        <div className="modal-overlay active" onClick={e => { if (e.target === e.currentTarget) setBlockModal(null) }}>
+          <div className="modal" style={{ maxWidth: 380 }}>
+            <div className="modal-header">
+              <h3><i className="ti ti-lock" style={{ marginRight: 8, color: "var(--red-600)" }} />Bloquear {blockModal}</h3>
+              <button className="modal-close" onClick={() => setBlockModal(null)}>&times;</button>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Motivo (opcional)</label>
+              <input className="form-input" placeholder="Ex: Almoço, reunião..." value={blockReason}
+                onChange={e => setBlockReason(e.target.value)} />
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
+              padding: "10px 14px", borderRadius: 8, marginBottom: 16,
+              background: blockRecurring ? "var(--amber-50)" : "var(--gray-50)",
+              border: `1px solid ${blockRecurring ? "var(--amber-400)" : "var(--gray-200)"}` }}>
+              <input type="checkbox" checked={blockRecurring} onChange={e => setBlockRecurring(e.target.checked)}
+                style={{ width: 16, height: 16, accentColor: "var(--amber-600)" }} />
+              <span style={{ fontSize: 13, fontWeight: 500 }}>
+                <i className="ti ti-repeat" style={{ marginRight: 6 }} />
+                Repetir toda semana (próximas 52 semanas)
+              </span>
+            </label>
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setBlockModal(null)}>Cancelar</button>
+              <button className="btn btn-primary" onClick={confirmBloquear}
+                style={{ background: "var(--red-600)", borderColor: "var(--red-600)" }}
+                disabled={!!blockingSlot}>
+                <i className="ti ti-lock" style={{ marginRight: 4 }} />
+                {blockingSlot ? "Bloqueando…" : "Bloquear horário"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL: DETALHE DO DIA (semana) ===== */}
+      {weekDayDetail && (
+        <div className="modal-overlay active" onClick={e => { if (e.target === e.currentTarget) setWeekDayDetail(null) }}>
+          <div className="modal" style={{ maxWidth: 560, maxHeight: "85vh", overflowY: "auto" }}>
+            <div className="modal-header">
+              <h3>
+                <i className="ti ti-calendar" style={{ marginRight: 8 }} />
+                {new Date(weekDayDetail + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}
+              </h3>
+              <button className="modal-close" onClick={() => setWeekDayDetail(null)}>&times;</button>
+            </div>
+            <div className="card-flush" style={{ overflow: "hidden" }}>
+              {TIME_SLOTS.map(time => {
+                const sess = weekDaySessions.find(s => normalizeTime(s.scheduled_time) === time)
+                const blk = weekDayBlocked.find(b => normalizeTime(b.slot_time) === time)
+                return (
+                  <div key={time} style={{ display: "flex", alignItems: "center", gap: 14,
+                    padding: "12px 4px", borderBottom: "1px solid var(--gray-50)" }}>
+                    <div style={{ minWidth: 48, fontWeight: 700, fontSize: 13, color: "var(--teal-700)" }}>{time}</div>
+                    <div style={{ flex: 1 }}>
+                      {sess ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontWeight: 600, fontSize: 13 }}>{getPatientName(sess)}</span>
+                          <span className="badge badge-neutral" style={{ fontSize: 10 }}>Sessão {sess.session_number}/10</span>
+                          <StatusBadge status={sess.status} />
+                        </div>
+                      ) : blk ? (
+                        <span className="badge" style={{ background: "var(--gray-50)", color: "var(--gray-500)", border: "1px solid var(--gray-300)" }}>
+                          <i className="ti ti-lock" style={{ marginRight: 4, fontSize: 11 }} />
+                          Bloqueado{blk.reason ? ` — ${blk.reason}` : ""}
+                          {blk.recurring_group_id && " 🔁"}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 12, color: "var(--gray-400)" }}>Disponível</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         </div>
