@@ -55,6 +55,14 @@ interface ActivePatient {
   full_name: string
 }
 
+interface RecurringSchedule {
+  id: string
+  patient_id: string
+  day_of_week: number
+  scheduled_time: string
+  patients: { full_name: string } | null
+}
+
 // --- Constants ---
 const TIME_SLOTS = [
   "07:00", "08:00", "09:00", "10:00", "11:00",
@@ -341,6 +349,7 @@ export default function AgendaPage() {
   const [weekDayDetail, setWeekDayDetail] = useState<string | null>(null)
   const [weekDayBlocked, setWeekDayBlocked] = useState<BlockedSlot[]>([])
   const [weekDaySessions, setWeekDaySessions] = useState<SessionWithPatient[]>([])
+  const [recurringSchedules, setRecurringSchedules] = useState<RecurringSchedule[]>([])
 
   // Agendamento recorrente
   const [scheduleRecurring, setScheduleRecurring] = useState(false)
@@ -446,17 +455,24 @@ export default function AgendaPage() {
       .then(r => r.json())
       .then(j => setTodayBlockedSlots(j.slots ?? []))
       .catch(() => {})
+    // Carrega agenda recorrente para mostrar na semana
+    fetch("/api/agenda/recorrente")
+      .then(r => r.json())
+      .then(j => setRecurringSchedules(j.schedules ?? []))
+      .catch(() => {})
   }, [loadTodaySessions, loadActivePatients])
 
   async function openWeekDayDetail(date: string) {
     setWeekDayDetail(date)
+    setWeekDaySessions([])
+    setWeekDayBlocked([])
     const [sessRes, blkRes] = await Promise.all([
       supabase.from("sessions")
         .select("*, packages(patient_id, patients(full_name))")
         .eq("scheduled_date", date)
         .not("status", "in", "(cancelled,no_show,rescheduled)")
         .order("scheduled_time"),
-      fetch(`/api/agenda/bloqueios?date=${date}`).then(r => r.json()),
+      fetch(`/api/agenda/bloqueios?date=${date}`).then(r => r.json()).catch(() => ({ slots: [] })),
     ])
     setWeekDaySessions((sessRes.data as unknown as SessionWithPatient[]) ?? [])
     setWeekDayBlocked(blkRes.slots ?? [])
@@ -893,6 +909,11 @@ export default function AgendaPage() {
                   (s) => s.scheduled_date === date
                 )
                 const isToday = date === today
+                const dayDow = new Date(date + "T12:00:00").getDay()
+                const dayRecurring = recurringSchedules.filter(
+                  r => r.day_of_week === dayDow &&
+                       !daySessions.some(s => normalizeTime(s.scheduled_time) === normalizeTime(r.scheduled_time))
+                )
 
                 return (
                   <div
@@ -925,8 +946,8 @@ export default function AgendaPage() {
                       </div>
                     </div>
 
-                    {/* Sessions */}
-                    {daySessions.length === 0 ? (
+                    {/* Sessions + Recurring */}
+                    {daySessions.length === 0 && dayRecurring.length === 0 ? (
                       <div
                         className="muted text-sm"
                         style={{ textAlign: "center", fontSize: 11 }}
@@ -974,6 +995,25 @@ export default function AgendaPage() {
                             </div>
                             <div style={{ marginTop: 4 }}>
                               <StatusBadge status={s.status} />
+                            </div>
+                          </div>
+                        ))}
+                        {dayRecurring.map((r) => (
+                          <div
+                            key={r.id}
+                            style={{
+                              background: "#eff6ff",
+                              borderRadius: 6,
+                              padding: "4px 6px",
+                              borderLeft: "3px solid #60a5fa",
+                              opacity: 0.85,
+                            }}
+                          >
+                            <div style={{ fontSize: 10, fontWeight: 700, color: "#1d4ed8" }}>
+                              {normalizeTime(r.scheduled_time)} 🔁
+                            </div>
+                            <div style={{ fontSize: 10, color: "var(--gray-500)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {r.patients?.full_name ?? "—"}
                             </div>
                           </div>
                         ))}
@@ -1628,6 +1668,10 @@ export default function AgendaPage() {
               {TIME_SLOTS.map(time => {
                 const sess = weekDaySessions.find(s => normalizeTime(s.scheduled_time) === time)
                 const blk = weekDayBlocked.find(b => normalizeTime(b.slot_time) === time)
+                const dow = new Date(weekDayDetail + "T12:00:00").getDay()
+                const rec = !sess && !blk
+                  ? recurringSchedules.find(r => r.day_of_week === dow && normalizeTime(r.scheduled_time) === time)
+                  : null
                 return (
                   <div key={time} style={{ display: "flex", alignItems: "center", gap: 14,
                     padding: "12px 4px", borderBottom: "1px solid var(--gray-50)" }}>
@@ -1645,6 +1689,16 @@ export default function AgendaPage() {
                           Bloqueado{blk.reason ? ` — ${blk.reason}` : ""}
                           {blk.recurring_group_id && " 🔁"}
                         </span>
+                      ) : rec ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 12, color: "#2563eb", fontWeight: 500 }}>
+                            <i className="ti ti-repeat" style={{ marginRight: 4, fontSize: 11 }} />
+                            {rec.patients?.full_name ?? "—"}
+                          </span>
+                          <span className="badge" style={{ fontSize: 10, background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" }}>
+                            recorrente
+                          </span>
+                        </div>
                       ) : (
                         <span style={{ fontSize: 12, color: "var(--gray-400)" }}>Disponível</span>
                       )}

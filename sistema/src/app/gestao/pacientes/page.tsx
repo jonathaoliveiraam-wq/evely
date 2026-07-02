@@ -375,7 +375,7 @@ export default function PacientesPage() {
                       <td><span className="badge badge-neutral">—</span></td>
                       <td><span className={`badge ${STATUS_BADGE[p.status] ?? "badge-neutral"}`}>{STATUS_LABEL[p.status] ?? p.status}</span></td>
                       <td style={{ whiteSpace: "nowrap" }}>
-                        {p.status === "awaiting_payment" && (
+                        {(p.status === "awaiting_payment" || p.status === "suspended_travel") && (
                           <button
                             className="btn btn-primary btn-sm"
                             style={{ fontSize: 11, padding: "4px 10px" }}
@@ -393,7 +393,7 @@ export default function PacientesPage() {
                             <i className="ti ti-player-pause" /> Desativar
                           </button>
                         )}
-                        {p.status !== "awaiting_payment" && p.status !== "active" && (
+                        {p.status !== "awaiting_payment" && p.status !== "active" && p.status !== "suspended_travel" && (
                           <i className="ti ti-chevron-right muted" />
                         )}
                       </td>

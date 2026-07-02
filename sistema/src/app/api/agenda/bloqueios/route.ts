@@ -9,13 +9,21 @@ export async function GET(req: Request) {
 
   try {
     const supabase = await createAdminClient();
-    const { data, error } = await supabase
+    // tenta com recurring_group_id, cai para sem ela se coluna não existe ainda
+    let { data, error } = await supabase
       .from("blocked_slots")
       .select("id, slot_time, reason, recurring_group_id")
       .eq("slot_date", date)
       .order("slot_time");
 
-    if (error) return NextResponse.json({ slots: [] });
+    if (error) {
+      const fallback = await supabase
+        .from("blocked_slots")
+        .select("id, slot_time, reason")
+        .eq("slot_date", date)
+        .order("slot_time");
+      data = (fallback.data as typeof data) ?? null;
+    }
     return NextResponse.json({ slots: data ?? [] });
   } catch {
     return NextResponse.json({ slots: [] });
