@@ -131,30 +131,18 @@ export default function GestaoPage() {
       {/* Metric cards */}
       <div className="g-grid grid-4 mb-16">
         <div className="metric-card">
-          <div className="metric-icon" style={{ background: "var(--teal-50)", color: "var(--teal-800)" }}>
-            <i className="ti ti-users" />
-          </div>
           <div className="metric-label">Pacientes ativos</div>
           <div className="metric-value">{activePatients}</div>
         </div>
         <div className="metric-card">
-          <div className="metric-icon" style={{ background: "var(--teal-50)", color: "var(--teal-800)" }}>
-            <i className="ti ti-stethoscope" />
-          </div>
           <div className="metric-label">Sessões no mês</div>
           <div className="metric-value">{monthSessions}</div>
         </div>
         <div className="metric-card">
-          <div className="metric-icon" style={{ background: "var(--teal-50)", color: "var(--teal-800)" }}>
-            <i className="ti ti-coin" />
-          </div>
           <div className="metric-label">Faturamento no mês</div>
           <div className="metric-value" style={{ fontSize: monthRevenue > 99999 ? 20 : 26 }}>{fmt(monthRevenue)}</div>
         </div>
         <div className="metric-card">
-          <div className="metric-icon" style={{ background: "var(--amber-50)", color: "var(--amber-700)" }}>
-            <i className="ti ti-refresh" />
-          </div>
           <div className="metric-label">A renovar (7 dias)</div>
           <div className="metric-value">{renewingSoon}</div>
           <div className="text-xs muted">{renewingSoon === 0 ? "Nenhum vencendo" : `${renewingSoon} pacote${renewingSoon > 1 ? "s" : ""}`}</div>

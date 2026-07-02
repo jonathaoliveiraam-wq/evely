@@ -8,7 +8,7 @@ const TITLES: Record<string, [string, string]> = {
   "/gestao/agenda":     ["Agenda", "Visualize e organize os atendimentos da semana"],
   "/gestao/pacientes":  ["Pacientes", "Cadastro, financeiro e relacionamento em um só lugar"],
   "/gestao/financeiro": ["Financeiro", "Pagamentos do mês e pacotes a renovar"],
-  "/gestao/cs":         ["CS — Relacionamento", "Contratos vencidos, aniversariantes e suspensões"],
+  "/gestao/cs":         ["Suporte", "Contratos vencidos, aniversariantes e suspensões"],
 };
 
 const EMPTY = { full_name: "", phone: "", guardian_name: "", birth_date: "", diagnosis: "", notes: "", portal_username: "", password: "" };
